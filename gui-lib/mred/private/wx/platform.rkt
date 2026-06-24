@@ -9,13 +9,17 @@
 (define-runtime-module-path-index platform-lib
   #:runtime?-id runtime?
   (let ([gtk-lib
-         '(lib "mred/private/wx/gtk/platform.rkt")])
-    (case (if runtime? (system-type) (cross-system-type))
-      [(windows) (if (getenv "PLT_WIN_GTK")
-                     gtk-lib
-                     '(lib "mred/private/wx/win32/platform.rkt"))]
-      [(macosx) '(lib "mred/private/wx/cocoa/platform.rkt")]
-      [(unix) gtk-lib])))
+         '(lib "mred/private/wx/gtk/platform.rkt")]
+        [qt-lib
+         '(lib "mred/private/wx/qt/platform.rkt")])
+    (if (getenv "PLT_QT")
+        qt-lib
+        (case (if runtime? (system-type) (cross-system-type))
+          [(windows) (if (getenv "PLT_WIN_GTK")
+                         gtk-lib
+                         '(lib "mred/private/wx/win32/platform.rkt"))]
+          [(macosx) '(lib "mred/private/wx/cocoa/platform.rkt")]
+          [(unix) gtk-lib]))))
 
 (define-values (button%
                 canvas%
