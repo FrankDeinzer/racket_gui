@@ -127,7 +127,7 @@
       (super show on?))
 
     (define/override (refresh)
-      (shim_canvas_request_repaint qt-handle))
+      (send this queue-paint))
 
     ; ---- extras required by make-item% and glue layer ----
 
