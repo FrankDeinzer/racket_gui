@@ -260,7 +260,8 @@
     (define/public (get-scroll-range which)         0)
     (define/public (set-scroll-range which v)       (void))
     (define/public (show-scrollbars h? v?)          (void))
-    (define/override (set-focus)                    (void))
+    (define/override (set-focus)
+      (shim_widget_set_focus qt-handle))
     (define/public (set-wheel-steps-mode mode)      (void))
     ; Additional platform callbacks required by wxcanvas.rkt's override*
     (define/public (on-scroll e)             (void))

@@ -16,6 +16,7 @@
          shim_window_destroy
          shim_window_get_content_widget
          shim_widget_set_geometry
+         shim_widget_set_focus
          shim_canvas_create
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
@@ -104,6 +105,10 @@
 (define shim_widget_set_geometry
   (get-ffi-obj "shim_widget_set_geometry" shim-lib
                (_fun _pointer _int _int _int _int -> _void)))
+
+(define shim_widget_set_focus
+  (get-ffi-obj "shim_widget_set_focus" shim-lib
+               (_fun _pointer -> _void)))
 
 (define shim_canvas_create
   (get-ffi-obj "shim_canvas_create" shim-lib
