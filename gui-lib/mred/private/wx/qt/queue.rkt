@@ -29,5 +29,7 @@
          ; Poll every 50 ms.  A proper wakeup mechanism is a
          ; follow-up task (see ARCHITECTURE.md §8).
          (sync/timeout 0.05 never-evt)
-         (atomically (shim_pump 10))
+         ; 0ms: draining without waiting avoids CFRunLoopRunInMode holding the
+         ; atomic lock and conflicting with Racket CS's mach-port sleep on macOS.
+         (atomically (shim_pump 0))
          (loop))))))
