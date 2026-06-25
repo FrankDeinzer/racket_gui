@@ -19,8 +19,10 @@
          "../common/canvas-mixin.rkt"
          "../common/backing-dc.rkt"
          "../common/queue.rkt"
+         "../common/event.rkt"
          "window.rkt"
-         "utils.rkt")
+         "utils.rkt"
+         "key-map.rkt")
 
 (provide canvas%)
 
@@ -80,6 +82,80 @@
           (error 'qt-canvas% "parent must be a Qt window%; got ~a" parent)))
 
     (define qt-handle (shim_canvas_create parent-handle expose-cb #f))
+
+    ; ---- Input callbacks (D-1) ------------------------------------------
+    ; All callbacks run #:atomic? #t — they only post events, never call
+    ; Racket handlers directly.
+
+    ; Mouse callback: type(0=press,1=release,2=move,3=enter,4=leave), x, y,
+    ;   buttons, mods.
+    ; For press/release: buttons = exactly one bit (the triggering button).
+    ; For move/enter/leave: buttons = all currently held buttons.
+    (define mouse-cb
+      (lambda (ud type x y buttons mods)
+        (define left?   (qt-buttons->left?   buttons))
+        (define middle? (qt-buttons->middle? buttons))
+        (define right?  (qt-buttons->right?  buttons))
+        (define event-type
+          (case type
+            [(0) (cond [left?   'left-down]
+                       [middle? 'middle-down]
+                       [right?  'right-down]
+                       [else    'left-down])]
+            [(1) (cond [left?   'left-up]
+                       [middle? 'middle-up]
+                       [right?  'right-up]
+                       [else    'left-up])]
+            [(2) 'motion]
+            [(3) 'enter]
+            [(4) 'leave]
+            [else 'motion]))
+        ; For release: the button is no longer down — invert sense.
+        (define left-down?   (if (= type 1) (not left?)   left?))
+        (define middle-down? (if (= type 1) (not middle?) middle?))
+        (define right-down?  (if (= type 1) (not right?)  right?))
+        (define e
+          (new mouse-event%
+               [event-type  event-type]
+               [left-down   left-down?]
+               [middle-down middle-down?]
+               [right-down  right-down?]
+               [x x] [y y]
+               [shift-down   (qt-mods->shift?   mods)]
+               [control-down (qt-mods->control? mods)]
+               [meta-down    (qt-mods->meta?    mods)]
+               [alt-down     (qt-mods->alt?     mods)]))
+        (queue-event the-eventspace
+                     (lambda () (send this dispatch-on-event e #f)))))
+
+    ; Key: type(0=press,1=release), Qt::Key, text-char(unicode), mods
+    (define key-cb
+      (lambda (ud type key text-char mods)
+        (define kc (qt-key->racket-keycode key text-char))
+        (when kc
+          (define e
+            (new key-event%
+                 [key-code     kc]
+                 [shift-down   (qt-mods->shift?   mods)]
+                 [control-down (qt-mods->control? mods)]
+                 [meta-down    (qt-mods->meta?    mods)]
+                 [alt-down     (qt-mods->alt?     mods)]))
+          ; For releases, record the release code so handlers can distinguish.
+          (when (= type 1)
+            (send e set-key-release-code kc))
+          (queue-event the-eventspace
+                       (lambda () (send this dispatch-on-char e #f))))))
+
+    ; Focus: gained(1=in, 0=out)
+    (define focus-cb
+      (lambda (ud gained)
+        (if (= gained 1)
+            (queue-event the-eventspace (lambda () (send this on-set-focus)))
+            (queue-event the-eventspace (lambda () (send this on-kill-focus))))))
+
+    (shim_canvas_set_mouse_cb qt-handle mouse-cb #f)
+    (shim_canvas_set_key_cb   qt-handle key-cb   #f)
+    (shim_canvas_set_focus_cb qt-handle focus-cb #f)
 
     (super-new [handle     qt-handle]
                [parent     parent]
