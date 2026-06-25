@@ -29,8 +29,8 @@
 
     (define parent-handle
       (if (and parent (object? parent) (is-a? parent window%))
-          (send parent get-qt-handle)
-          (error 'qt-button% "parent must be a Qt frame%; got ~a" parent)))
+          (send parent get-content-hwnd)
+          (error 'qt-button% "parent must be a Qt window%; got ~a" parent)))
 
     (define qt-handle
       (shim_button_create parent-handle
@@ -41,6 +41,16 @@
     (super-new [handle     qt-handle]
                [parent     parent]
                [eventspace the-eventspace])
+
+    ; ---- sizing ----
+
+    (define/override (set-size x y nw nh)
+      (super set-size x y nw nh)
+      (when (and nw (> nw 0) nh (> nh 0))
+        (shim_widget_set_geometry qt-handle
+                                  (if (and x (>= x 0)) x 0)
+                                  (if (and y (>= y 0)) y 0)
+                                  nw nh)))
 
     ; ---- platform interface ----
 

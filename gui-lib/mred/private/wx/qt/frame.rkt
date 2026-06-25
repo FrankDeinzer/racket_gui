@@ -29,6 +29,8 @@
                 (send this direct-show #f)))))))
 
     (define qt-handle (shim_window_create close-cb #f))
+    ; The central QWidget* that canvas/button/panel children parent to.
+    (define content-handle (shim_window_get_content_widget qt-handle))
 
     (super-new [handle     qt-handle]
                [parent     parent]
@@ -73,11 +75,8 @@
     (define/override (get-focus-window [even-if-not-active? #f]) #f)
     ; add-border-button, forget-child: NOT here — added by wxtop.rkt via public*
 
-    (define/override (get-qt-handle) qt-handle)
-
-    ; Frame panels/children register themselves via shim_*_create which
-    ; take the QMainWindow handle and add widgets to the VBoxLayout.
-    (define/public (get-content-hwnd) qt-handle)
+    (define/override (get-qt-handle)    qt-handle)
+    (define/override (get-content-hwnd) content-handle)
     ; show-control, add-child, forget-child: NOT here — added by
     ; make-top-container% (wxtop.rkt) via public*
 

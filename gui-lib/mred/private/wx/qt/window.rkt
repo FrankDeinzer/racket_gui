@@ -16,7 +16,8 @@
 ;   - geometry
 ;   - platform-level stubs for callbacks (on-set-focus etc.)
 (require racket/class
-         "../common/queue.rkt")
+         "../common/queue.rkt"
+         "../common/event.rkt")
 
 (provide window%
          qt-queue-window-event
@@ -131,5 +132,40 @@
 
     ; ---- Qt-specific ----
     (define/public (get-qt-handle)       handle)
+    ; Returns the QWidget* that children should use as their Qt parent.
+    ; frame% overrides to return the central widget; panel% to its own widget.
+    (define/public (get-content-hwnd)    handle)
+
+    ; ---- Event dispatch (called by glue layers and queued callbacks) ----
+    ; Pattern mirrors wx/win32/window.rkt and wx/gtk/window.rkt.
+
+    (define/public (dispatch-on-char/sync e)
+      (dispatch-on-char e #f))
+    (define/public (dispatch-on-char e just-pre?)
+      (cond
+        [(other-modal? this) #t]
+        [(call-pre-on-char this e) #t]
+        [just-pre? #f]
+        [else (when (is-enabled-to-root?) (on-char e)) #t]))
+
+    (define/public (dispatch-on-event/sync e)
+      (dispatch-on-event e #f))
+    (define/public (dispatch-on-event e just-pre?)
+      (cond
+        [(other-modal? this) #t]
+        [(call-pre-on-event this e) #t]
+        [just-pre? #f]
+        [else (when (is-enabled-to-root?) (on-event e)) #t]))
+
+    (define/public (call-pre-on-event w e)
+      (if (and parent (object? parent))
+          (or (send parent call-pre-on-event w e)
+              (pre-on-event w e))
+          (pre-on-event w e)))
+    (define/public (call-pre-on-char w e)
+      (if (and parent (object? parent))
+          (or (send parent call-pre-on-char w e)
+              (pre-on-char w e))
+          (pre-on-char w e)))
 
     (super-new)))

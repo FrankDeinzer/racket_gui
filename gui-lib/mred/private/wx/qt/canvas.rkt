@@ -72,12 +72,12 @@
         (queue-refresh-event the-eventspace
                              (lambda () (send this queue-paint)))))
 
-    ; Parent must be a frame% (or something with get-qt-handle).
-    ; mred->wx-container gives us the platform parent.
+    ; Parent must expose get-content-hwnd (frame% → central QWidget,
+    ; panel% → panel QWidget).
     (define parent-handle
       (if (and parent (object? parent) (is-a? parent window%))
-          (send parent get-qt-handle)
-          (error 'qt-canvas% "parent must be a Qt frame%; got ~a" parent)))
+          (send parent get-content-hwnd)
+          (error 'qt-canvas% "parent must be a Qt window%; got ~a" parent)))
 
     (define qt-handle (shim_canvas_create parent-handle expose-cb #f))
 
@@ -112,6 +112,15 @@
 
     ; ---- sizing ----
 
+    ; Forward Racket's layout-computed geometry to Qt.
+    (define/override (set-size x y nw nh)
+      (super set-size x y nw nh)
+      (when (and nw (> nw 0) nh (> nh 0))
+        (shim_widget_set_geometry qt-handle
+                                  (if (and x (>= x 0)) x 0)
+                                  (if (and y (>= y 0)) y 0)
+                                  nw nh)))
+
     (define/override (get-client-size wb hb)
       (set-box! wb (max 1 (shim_canvas_get_width  qt-handle)))
       (set-box! hb (max 1 (shim_canvas_get_height qt-handle))))
@@ -142,7 +151,7 @@
     ; Compatibility stubs for wx-make-window% / make-item%
     (define/public  (direct-show on?) (send this show on?))
     (define/override (is-shown?)      (send this is-shown-to-root?))
-    (define/public  (get-content-hwnd) qt-handle)
+    (define/override (get-content-hwnd) qt-handle)
     (define/public  (schedule-periodic-backing-flush) (void))
     (define/public  (queue-paint)          (void))
     (define/override (paint-children)      (void))
