@@ -13,6 +13,7 @@
          "menu-bar.rkt"
          "menu.rkt"
          "menu-item.rkt"
+         "message.rkt"
          "queue.rkt")
 
 (provide (protect-out platform-values))
@@ -23,7 +24,8 @@
 (define (make-stub-class name)
   (class window%
     (init-rest args)
-    (super-new [handle #f] [parent #f])
+    (define the-parent (if (pair? args) (car args) #f))
+    (super-new [handle #f] [parent the-parent])
     ; Widget interface stubs so glue layers can `inherit` them:
     (define/public (command e)       (void))
     (define/public (set-border on?)  (void))
@@ -68,7 +70,10 @@
     ; append is already defined above (as (append s)) — redefine as case-lambda
     ; to support both (append s) and (append menu title) arities
     (define/public (enable-top pos on?)              (void))
-    (error name "not implemented in Qt spike")))
+    ; on-combo-select: expected by wxtextfield.rkt via override* on combo controls
+    (define/public (on-combo-select i)               (void))
+    ; set-callback: mrpanel.rkt sends this to the tab widget (get-tab-widget)
+    (define/public (set-callback cb)                 (void))))
 
 ; ---- unimplemented stubs ---------------------------------------------------
 
@@ -86,7 +91,7 @@
 (define group-panel%   (make-stub-class 'group-panel%))
 (define list-box%      (make-stub-class 'list-box%))
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
-(define message%       (make-stub-class 'message%))
+; message% is the real implementation (message.rkt); imported above
 ; printer-dc% must NOT extend window% — it's a DC class.
 ; doc+page-check-mixin (racket/draw/private/page-dc) applies define/override to
 ; start-doc/end-doc/start-page/end-page and all draw methods.

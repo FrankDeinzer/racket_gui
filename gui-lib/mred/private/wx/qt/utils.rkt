@@ -44,6 +44,8 @@
          shim_action_set_label
          shim_action_set_checked
          shim_action_is_checked
+         shim_label_create
+         shim_label_set_text
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -238,3 +240,13 @@
 (define shim_action_is_checked
   (get-ffi-obj "shim_action_is_checked" shim-lib
                (_fun _pointer -> _int)))
+
+; ---- label ------------------------------------------------------------------
+
+(define shim_label_create
+  (get-ffi-obj "shim_label_create" shim-lib
+               (_fun _pointer _string/utf-8 -> _pointer)))
+
+(define shim_label_set_text
+  (get-ffi-obj "shim_label_set_text" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))

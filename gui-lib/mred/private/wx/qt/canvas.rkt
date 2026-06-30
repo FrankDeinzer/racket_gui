@@ -161,6 +161,16 @@
                [parent     parent]
                [eventspace the-eventspace])
 
+    ; Seed window%'s w/h from init args so get-size() is consistent with
+    ; admin.get-view() before layout runs. Without this, make-editor-canvas%'s
+    ; update-size computes (h - ch) < 0 when h=0 and ch=positive.
+    ; NOTE: get-width/get-height are NOT overridden here — window%'s stored
+    ; values (initially 0) ensure same-dimension? sees a change and calls super.
+    (when (and (integer? w) (> w 0) (integer? h) (> h 0))
+      (send this set-size (if (and (integer? x) (>= x 0)) x 0)
+                          (if (and (integer? y) (>= y 0)) y 0)
+                          w h))
+
     (define dc (new qt-dc% [qt-canvas this]))
 
     ; ---- canvas-mixin required interface ----
@@ -200,11 +210,6 @@
     (define/override (get-client-size wb hb)
       (set-box! wb (max 1 (shim_canvas_get_width  qt-handle)))
       (set-box! hb (max 1 (shim_canvas_get_height qt-handle))))
-
-    (define/override (get-width)
-      (shim_canvas_get_width qt-handle))
-    (define/override (get-height)
-      (shim_canvas_get_height qt-handle))
 
     ; ---- visibility ----
 
@@ -271,7 +276,14 @@
     ;   public* (wxitem.rkt:177); make-editor-canvas% then overrides it.
     ; NOTE: on-scroll-on-change must NOT be here — wx:editor-canvas% (wxme)
     ;   adds it via define/public; make-editor-canvas% then overrides it.
-    ))
+
+    ; Combo-box interface — wxtextfield.rkt creates a wx-text-editor-canvas%
+    ; subclass that overrides on-combo-select, and calls the others on `c`.
+    (define/public (on-combo-select i)    (void))
+    (define/public (popup-combo)          (void))
+    (define/public (clear-combo-items)    (void))
+    (define/public (append-combo-item s)  #f)
+    (define/public (set-combo-text t)     (void))))
 
 ; ---- canvas% = canvas-mixin applied to base-canvas% --------------------
 
