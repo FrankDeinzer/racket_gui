@@ -15,6 +15,7 @@
          shim_window_show
          shim_window_destroy
          shim_window_get_content_widget
+         shim_window_set_menubar
          shim_widget_set_geometry
          shim_widget_set_focus
          shim_canvas_create
@@ -29,6 +30,20 @@
          shim_panel_create
          shim_button_create
          shim_button_destroy
+         shim_menubar_create
+         shim_menubar_add_menu
+         shim_menubar_enable_at
+         shim_menubar_remove_at
+         shim_menu_create
+         shim_menu_add_submenu
+         shim_menu_add_separator
+         shim_menu_remove_action
+         shim_menu_popup
+         shim_action_create
+         shim_action_set_enabled
+         shim_action_set_label
+         shim_action_set_checked
+         shim_action_is_checked
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -157,3 +172,69 @@
 (define shim_button_destroy
   (get-ffi-obj "shim_button_destroy" shim-lib
                (_fun _pointer -> _void)))
+
+; ---- menu-bar ---------------------------------------------------------------
+
+(define shim_menubar_create
+  (get-ffi-obj "shim_menubar_create" shim-lib
+               (_fun -> _pointer)))
+
+(define shim_window_set_menubar
+  (get-ffi-obj "shim_window_set_menubar" shim-lib
+               (_fun _pointer _pointer -> _void)))
+
+(define shim_menubar_add_menu
+  (get-ffi-obj "shim_menubar_add_menu" shim-lib
+               (_fun _pointer _pointer -> _void)))
+
+(define shim_menubar_enable_at
+  (get-ffi-obj "shim_menubar_enable_at" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_menubar_remove_at
+  (get-ffi-obj "shim_menubar_remove_at" shim-lib
+               (_fun _pointer _int -> _void)))
+
+; ---- menu -------------------------------------------------------------------
+
+(define shim_menu_create
+  (get-ffi-obj "shim_menu_create" shim-lib
+               (_fun _string/utf-8 -> _pointer)))
+
+(define shim_menu_add_submenu
+  (get-ffi-obj "shim_menu_add_submenu" shim-lib
+               (_fun _pointer _string/utf-8 _pointer -> _pointer)))
+
+(define shim_menu_add_separator
+  (get-ffi-obj "shim_menu_add_separator" shim-lib
+               (_fun _pointer -> _pointer)))
+
+(define shim_menu_remove_action
+  (get-ffi-obj "shim_menu_remove_action" shim-lib
+               (_fun _pointer _pointer -> _void)))
+
+(define shim_menu_popup
+  (get-ffi-obj "shim_menu_popup" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+; ---- action -----------------------------------------------------------------
+
+(define shim_action_create
+  (get-ffi-obj "shim_action_create" shim-lib
+               (_fun _string/utf-8 _int _callback_t _pointer -> _pointer)))
+
+(define shim_action_set_enabled
+  (get-ffi-obj "shim_action_set_enabled" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_action_set_label
+  (get-ffi-obj "shim_action_set_label" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_action_set_checked
+  (get-ffi-obj "shim_action_set_checked" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_action_is_checked
+  (get-ffi-obj "shim_action_is_checked" shim-lib
+               (_fun _pointer -> _int)))

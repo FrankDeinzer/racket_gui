@@ -7,8 +7,12 @@
          "frame.rkt"
          "canvas.rkt"
          "button.rkt"
+         "dialog.rkt"
          "panel.rkt"
          "window.rkt"
+         "menu-bar.rkt"
+         "menu.rkt"
+         "menu-item.rkt"
          "queue.rkt")
 
 (provide (protect-out platform-values))
@@ -71,13 +75,17 @@
 (define canvas-panel%  (make-stub-class 'canvas-panel%))
 (define check-box%     (make-stub-class 'check-box%))
 (define choice%        (make-stub-class 'choice%))
-(define dialog%        (make-stub-class 'dialog%))
-(define gauge%         (make-stub-class 'gauge%))
+; dialog% is the real implementation (dialog.rkt); imported above
+; gauge%: non-erroring stub (visual-only progress bar, e.g. DrRacket splash)
+(define gauge%
+  (class window%
+    (init-rest _args)
+    (super-new [handle #f] [parent #f])
+    (define/public (set-gauge-value v) (void))
+    (define/public (get-gauge-value)   0)))
 (define group-panel%   (make-stub-class 'group-panel%))
 (define list-box%      (make-stub-class 'list-box%))
-(define menu%          (make-stub-class 'menu%))
-(define menu-bar%      (make-stub-class 'menu-bar%))
-(define menu-item%     (make-stub-class 'menu-item%))
+; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
 (define message%       (make-stub-class 'message%))
 ; printer-dc% must NOT extend window% — it's a DC class.
 ; doc+page-check-mixin (racket/draw/private/page-dc) applies define/override to
@@ -144,7 +152,12 @@
 
 (define (can-show-print-setup?)          #f)
 (define (show-print-setup parent)        #f)
-(define (id-to-menu-item id)             #f)
+; id is `this` from platform menu-item%'s (id) method. Since Racket's `this`
+; is always the most-derived object, id IS the wx-menu-item% glue instance,
+; which has get-mred.  We guard with is-a? to avoid errors on unexpected types.
+(define (id-to-menu-item id)
+  (and (object? id) (is-a? id menu-item%)
+       (send id get-mred)))
 (define (file-selector msg dir fn ext style parent) #f)
 (define (is-color-display?)              #t)
 (define (get-display-depth)              32)

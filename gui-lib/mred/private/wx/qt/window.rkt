@@ -118,6 +118,7 @@
     (define/public (set-event-positions-wrt c) (void))
     (define/public (set-cursor c)        (void))
     (define/public (reset-cursor default) (void))
+    (define/public (get-dialog-level) 0)
     (define/public (frame-relative-dialog-status win) #f)
     ; show-control: NOT here — added by make-top-container% (wxtop.rkt) via public*
     (define/public (client-to-screen xb yb) (void))

@@ -89,6 +89,13 @@
       (let ([wb (box 0)] [hb (box 0)])
         (send this get-client-size wb hb)
         (values (unbox wb) (unbox hb))))
+    ; Attaches a QMenuBar to this QMainWindow.
+    ; mb is wx-menu-bar% (glue extends platform menu-bar%).
+    (define/override (set-menu-bar mb)
+      (when mb
+        (shim_window_set_menubar qt-handle (send mb get-menubar-handle))
+        (send mb set-frame this)))
+
     ; on-menu-command, on-menu-click, on-toolbar-click, on-mdi-activate:
     ; override* targets from wx-frame% — frame% overrides window%'s stubs
     (define/override (on-menu-command id)   (void))
@@ -96,6 +103,7 @@
     (define/override (on-toolbar-click)     (void))
     (define/override (on-mdi-activate on?)  (void))
     (define/override (get-top-frame) this)
+    (define/override (get-dialog-level) 0)
 
     ; Sizing helpers used by make-top-container%
     (define/public (min-width)  0)
@@ -116,5 +124,3 @@
 
 (define (display-bitmap-resolution [num 0] [fail-thunk #f]) 1)
 
-; other-modal?: copied minimal version — no modal dialogs in the spike.
-(define (other-modal? win) #f)
