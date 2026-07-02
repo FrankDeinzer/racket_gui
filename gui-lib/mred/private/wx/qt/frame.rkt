@@ -63,6 +63,9 @@
     (define/public (set-label lbl)
       (shim_window_set_title qt-handle lbl))
 
+    (define/public (set-title s)
+      (shim_window_set_title qt-handle s))
+
     ; Default: allow close; wxtop.rkt overrides to ask mred wrapper
     (define/override (on-close)           #t)
     ; on-activate, display-changed: override* targets in make-top-level-window-glue%
@@ -72,7 +75,7 @@
     ; make-top-container% inherits enforce-size (also defined in window% for dialog stubs)
     (define/override (enforce-size min-x min-y max-x max-y inc-x inc-y) (void))
 
-    (define/override (get-focus-window [even-if-not-active? #f]) #f)
+    ; get-focus-window: inherited from window% (tracks focus via on-set-focus/on-kill-focus)
     ; add-border-button, forget-child: NOT here — added by wxtop.rkt via public*
 
     (define/override (get-qt-handle)    qt-handle)

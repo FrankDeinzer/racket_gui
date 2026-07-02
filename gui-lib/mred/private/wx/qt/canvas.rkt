@@ -133,15 +133,17 @@
       (lambda (ud type key text-char mods)
         (define kc (qt-key->racket-keycode key text-char))
         (when kc
+          (define is-up? (= type 1))
           (define e
             (new key-event%
-                 [key-code     kc]
+                 ; Release events carry the 'release symbol as key-code (per
+                 ; racket/gui contract); the real key goes in key-release-code.
+                 [key-code     (if is-up? 'release kc)]
                  [shift-down   (qt-mods->shift?   mods)]
                  [control-down (qt-mods->control? mods)]
                  [meta-down    (qt-mods->meta?    mods)]
                  [alt-down     (qt-mods->alt?     mods)]))
-          ; For releases, record the release code so handlers can distinguish.
-          (when (= type 1)
+          (when is-up?
             (send e set-key-release-code kc))
           (queue-event the-eventspace
                        (lambda () (send this dispatch-on-char e #f))))))
@@ -251,8 +253,9 @@
     (define/public (end-refresh-sequence)   (void))
     (define/public (flush)
       (shim_canvas_request_repaint qt-handle))
-    (define/public (get-canvas-background) #f)
-    (define/public (set-canvas-background c) (void))
+    (define bg-col (make-object color% "white"))
+    (define/public (get-canvas-background) bg-col)
+    (define/public (set-canvas-background c) (set! bg-col c))
     (define/override (set-resize-corner on?) (void))
     ; NOTE: min-client-width and min-client-height are NOT defined here.
     ; They are added by make-item% via public* as case-lambda parameters.

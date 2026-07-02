@@ -84,10 +84,15 @@
 ; gauge%: non-erroring stub (visual-only progress bar, e.g. DrRacket splash)
 (define gauge%
   (class window%
-    (init-rest _args)
-    (super-new [handle #f] [parent #f])
-    (define/public (set-gauge-value v) (void))
-    (define/public (get-gauge-value)   0)))
+    (init-rest args)
+    (define the-parent (if (pair? args) (car args) #f))
+    (super-new [handle #f] [parent the-parent])
+    (define range 100)
+    (define value 0)
+    (define/public (get-range)   range)
+    (define/public (set-range r) (set! range r))
+    (define/public (get-value)   value)
+    (define/public (set-value v) (set! value v))))
 (define group-panel%   (make-stub-class 'group-panel%))
 (define list-box%      (make-stub-class 'list-box%))
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
@@ -163,15 +168,19 @@
 (define (id-to-menu-item id)
   (and (object? id) (is-a? id menu-item%)
        (send id get-mred)))
-(define (file-selector msg dir fn ext style parent) #f)
+(define (file-selector msg dir fn ext filters style parent) #f)
 (define (is-color-display?)              #t)
 (define (get-display-depth)              32)
 (define (has-x-selection?)               #f)
 (define (hide-cursor)                    (void))
 (define (bell)                           (void))
 (define (flush-display)                  (void))
-(define (get-current-mouse-state xb yb)
-  (set-box! xb 0) (set-box! yb 0))
+; ⚑ FLAG: no shim query for the real global cursor position/button-state yet
+; (gtk/win32/cocoa call into their native APIs). Stubbed at (0,0)/no-buttons
+; with the correct 0-arg/2-values contract so callers don't crash; revisit
+; if real position is needed (e.g. context-menu placement).
+(define (get-current-mouse-state)
+  (values (make-object point% 0 0) '()))
 (define (cancel-quit)                    (void))
 (define (get-control-font-face)          "Arial")
 (define (get-control-font-size)          11)
@@ -205,6 +214,7 @@
 (define (key-symbol-to-menu-key sym) #f)
 (define (needs-grow-box-spacer?) #f)
 (define (graphical-system-type)  'qt)
+(define (tab-panel-available?)   #t)
 (define (white-on-black-panel-scheme?)
   (let ([bg (get-label-background-color)]
         [fg (get-label-foreground-color)])
@@ -295,4 +305,5 @@
    key-symbol-to-menu-key
    needs-grow-box-spacer?
    graphical-system-type
-   white-on-black-panel-scheme?))
+   white-on-black-panel-scheme?
+   tab-panel-available?))

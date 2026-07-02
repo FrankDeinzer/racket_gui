@@ -80,8 +80,22 @@
     (define/public (parent-enable on?)   (void))
 
     ; ---- focus / keyboard / mouse callbacks ----
-    (define/public (on-set-focus)        (void))
-    (define/public (on-kill-focus)       (void))
+    ; Tracks which descendant currently has focus on the owning top frame,
+    ; so handle-traverse-key (wxtop.rkt) can find get-focus-window and let
+    ; widgets like editor-canvas% claim keys (e.g. #\return) instead of
+    ; having them swallowed as unclaimed traversal input.
+    (define/public (on-set-focus)
+      (let ([f (get-top-frame)])
+        (when (and f (is-a? f window%) (not (eq? f this)))
+          (send f record-focus-window this))))
+    (define/public (on-kill-focus)
+      (let ([f (get-top-frame)])
+        (when (and f (is-a? f window%) (not (eq? f this)))
+          (send f clear-focus-window this))))
+    (define current-focus-window #f)
+    (define/public (record-focus-window w) (set! current-focus-window w))
+    (define/public (clear-focus-window w)
+      (when (eq? w current-focus-window) (set! current-focus-window #f)))
     (define/public (on-char e)           (void))
     (define/public (on-event e)          (void))
     (define/public (on-size nw nh)       (void))
@@ -96,7 +110,7 @@
     (define/public (on-activate on?)     (void))
     (define/public (display-changed)     (void))
     (define/public (enforce-size min-x min-y max-x max-y inc-x inc-y) (void))
-    (define/public (get-focus-window [even-if-not-active? #f]) #f)
+    (define/public (get-focus-window [even-if-not-active? #f]) current-focus-window)
     (define/public (iconized?)           #f)
     (define/public (maximize on?)        (void))
     (define/public (is-maximized?)       #f)
@@ -121,8 +135,18 @@
     (define/public (get-dialog-level) 0)
     (define/public (frame-relative-dialog-status win) #f)
     ; show-control: NOT here — added by make-top-container% (wxtop.rkt) via public*
+    ; ⚑ FLAG: no shim query for a widget's global/screen position yet
+    ; (win32/gtk use HWND/GTK screen APIs). client-to-screen is a no-op, so
+    ; popup-menu below opens at the given local coordinates rather than the
+    ; true screen position. Revisit if placement matters (e.g. right-click
+    ; menus land in the wrong spot); doesn't crash, just mispositions.
     (define/public (client-to-screen xb yb) (void))
     (define/public (screen-to-client xb yb) (void))
+    (define/public (popup-menu m x y)
+      (let ([gx (box x)] [gy (box y)])
+        (client-to-screen gx gy)
+        (send m popup (unbox gx) (unbox gy) #f
+              (lambda (thunk) (qt-queue-window-event this thunk)))))
     (define/public (is-frame?)           #f)
     (define/public (gets-focus?)         #f)
     (define/public (set-focus)            (void))
