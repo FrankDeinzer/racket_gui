@@ -51,16 +51,24 @@
          _key_cb_t
          _focus_cb_t)
 
-; Locate the shim DLL.
-; Path from this file: 7 levels up = project root, then qt-shim/build/…
+; Locate the shim library.
+; Path from this file: 7 levels up = project root, then qt-shim/build/<preset>/
+; Windows uses a multi-config generator (Debug subdir); Ninja-based builds do not.
 (define shim-lib
   (let* ([here (path-only (collection-file-path "utils.rkt"
                                                 "mred" "private" "wx" "qt"))]
+         [root (build-path here ".." ".." ".." ".." ".." ".." "..")]
          [dll  (simplify-path
-                (build-path here
-                            ".." ".." ".." ".." ".." ".." ".."
-                            "qt-shim" "build" "windows-x64" "Debug"
-                            "racketqtshim"))])
+                (case (system-type 'os)
+                  [(windows)
+                   (build-path root "qt-shim" "build" "windows-x64" "Debug"
+                                "racketqtshim.dll")]
+                  [(macosx)
+                   (build-path root "qt-shim" "build" "macos-arm64"
+                                "libracketqtshim.dylib")]
+                  [else
+                   (build-path root "qt-shim" "build" "linux-x64"
+                                "libracketqtshim.so")]))])
     (ffi-lib (path->string dll))))
 
 ; C-callable callback type (called atomically from within processEvents).

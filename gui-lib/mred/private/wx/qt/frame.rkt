@@ -105,6 +105,10 @@
     (define/override (get-top-frame) this)
     (define/override (get-dialog-level) 0)
 
+    ; Called by mrtop.rkt on the first frame; cocoa uses it to set the app delegate,
+    ; gtk/win32 are no-ops.  Qt needs no special treatment here.
+    (define/public (designate-root-frame) (void))
+
     ; Sizing helpers used by make-top-container%
     (define/public (min-width)  0)
     (define/public (min-height) 0)
