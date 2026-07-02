@@ -36,7 +36,9 @@
                          exact-nonnegative-integer?))
          string?
          exact-nonnegative-integer?)
-        (#:allow-funny?
+        (#:increment-splash
+         (or/c #f (-> (-> void?) any))
+         #:allow-funny?
          boolean?
          #:frame-icon
          (or/c #f
@@ -185,18 +187,24 @@
    (set! icons (cons (make-icon bm x y) icons))
    (refresh-splash)))
 
-(define (start-splash splash-draw-spec _splash-title width-default 
+(define (start-splash splash-draw-spec _splash-title width-default
+                      #:increment-splash [increment-splash #f]
                       #:allow-funny? [allow-funny? #f]
                       #:frame-icon [frame-icon #f])
   (unless allow-funny? (set! funny? #f))
   (set! splash-title _splash-title)
   (set! splash-max-width (max 1 (splash-get-preference (get-splash-width-preference-name) width-default)))
-    
+
+  (cond
+    [increment-splash (increment-splash inc-splash)]
+    [else (install-splash-load-handler)])
+
   (on-splash-eventspace/ret
    (let/ec k
      (define (no-splash)
        (set! splash-bitmap #f)
        (k (void)))
+     (set! splash-range-ready? #t)
      (send (get-gauge) set-range splash-max-width)
      (send splash-tlw set-label splash-title)
      
@@ -280,31 +288,44 @@
          (= (date-day date) 25)
          (= (date-month date) 12))))
 
-(define (splash-load-handler old-load f expected)
+;; Don't set the guard value until its extent is intialized.
+;; Otherwise, a guarge of range 1 gets set to 1, which is full, and
+;; then the gauge is changed afterward so that 1 is a tiny fraction,
+;; but that makes animation (if any) bounce (on macOS Tahoe, for
+;; example)
+(define splash-range-ready? #f)
+
+(define (inc-splash)
   (set! splash-current-width (+ splash-current-width 1))
   (when (<= splash-current-width splash-max-width)
     (let ([splash-save-width splash-current-width])
       (on-splash-eventspace
-       (send (get-gauge) set-value splash-save-width)
+       (when splash-range-ready?
+         (send (get-gauge) set-value splash-save-width))
        (when (or (not (member (get-gauge) (send gauge-panel get-children)))
                  ;; when the gauge is not visible, we'll redraw the canvas regardless
                  (refresh-splash-on-gauge-change? splash-save-width splash-max-width))
-         (refresh-splash)))))
+         (refresh-splash))))))
+
+(define (splash-load-handler old-load f expected)
+  (inc-splash)
   (old-load f expected))
 
-(let ([make-compilation-manager-load/use-compiled-handler
-       (if (or (getenv "PLTDRCM")
-               (getenv "PLTDRDEBUG"))
-           (parameterize ([current-namespace (make-base-namespace)])
-             (dynamic-require 'compiler/cm
-                              'make-compilation-manager-load/use-compiled-handler))
-           #f)])
+(define (install-splash-load-handler)
+  (set! install-splash-load-handler void)
+  (define make-compilation-manager-load/use-compiled-handler
+    (if (or (getenv "PLTDRCM")
+            (getenv "PLTDRDEBUG"))
+        (parameterize ([current-namespace (make-base-namespace)])
+          (dynamic-require 'compiler/cm
+                           'make-compilation-manager-load/use-compiled-handler))
+        #f))
   
   (current-load
    (let ([old-load (current-load)])
      (λ (f expected)
        (splash-load-handler old-load f expected))))
-  
+
   (when make-compilation-manager-load/use-compiled-handler
     (printf "PLTDRCM/PLTDRDEBUG: reinstalling CM load handler after setting splash load handler\n")
     (current-load/use-compiled (make-compilation-manager-load/use-compiled-handler))))

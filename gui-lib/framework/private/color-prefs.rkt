@@ -1,4 +1,20 @@
 #lang racket/unit
+
+#|
+
+The color scheme library should probalby move into mrlib
+so that other mrlib libraries can depend on it without
+pulling in the framework.
+
+I'm not sure how to do that wrt to the editor style list,
+tho, as the sharing of that is pretty key to how this works.
+
+Notably the syntax snips don't quite work currently; when you
+open them and then switch from dark to light mode, the label
+on top's background stays in the wrong mode.
+  
+|#
+
   (require racket/class
            racket/gui/base
            string-constants
@@ -12,14 +28,16 @@
            mrlib/panel-wob
            "../preferences.rkt"
            "sig.rkt"
-           "srcloc-panel.rkt")
+           "srcloc-panel.rkt"
+           (prefix-in wob-cs: "wob-color-scheme.rkt")
+           )
   
   (import [prefix preferences: framework:preferences^]
           [prefix editor: framework:editor^]
           [prefix canvas: framework:canvas^]
           [prefix racket: framework:racket^]
           [prefix color: framework:color^])
-  (export framework:color-prefs^)
+  (export framework:color-prefs/int^)
   (init-depend framework:editor^)
   
   (define standard-style-list-text% (editor:standard-style-list-mixin text%))
@@ -712,8 +730,8 @@
 (define black-on-white-color-scheme-name 'classic)
 (define white-on-black-color-scheme-name 'white-on-black)
 (define known-color-schemes
-  ;; note:first item in this list must be the black-on-white color scheme
-  ;; and the second must the white-on-black color scheme
+  ;; note: first item in this list must be the default black-on-white color scheme
+  ;; and the second must the default white-on-black color scheme
   (list (color-scheme black-on-white-color-scheme-name
                       (string-constant classic-color-scheme)
                       #f (make-hash) default-example
@@ -732,12 +750,16 @@
 
 (define-logger color-scheme)
 
+(define white-on-black-color-scheme? wob-cs:white-on-black-color-scheme?)
+
 (define (register-info-based-color-schemes)
   (log-color-scheme-info
    "color-names: ~a\nstyle-names:\n~a\n" 
    (sort (set->list known-color-names) symbol<?)
    (sort (set->list known-style-names) symbol<?))
-  (define preferred-color-scheme (preferences:get 'framework:color-scheme))
+  (define preferred-color-scheme (if (white-on-black-color-scheme?)
+                                     (preferences:get 'framework:color-scheme-dark)
+                                     (preferences:get 'framework:color-scheme-light)))
   (for ([dir (in-list (find-relevant-directories '(framework:color-schemes)))])
     (define info (with-handlers ([exn:fail?
                                   (λ (x)
@@ -791,7 +813,7 @@
   ;; the color-scheme saved in the user's preferences may not be known
   ;; until after the code above executes, which would mean that the 
   ;; color scheme in effect up to that point may be wrong. So fix that here:
-  (set-current-color-scheme preferred-color-scheme #t))
+  (set-current-color-scheme preferred-color-scheme))
 
 
 ;; register-color-scheme : string boolean? (listof (cons/c symbol? (listof props)) -> void
@@ -873,7 +895,7 @@
        [inverted-base-name
         (define inverted-base (lookup-color-scheme inverted-base-name))
         (cond
-          [(equal? (white-on-black-panel-scheme?)
+          [(equal? (white-on-black-color-scheme?)
                    (color-scheme-white-on-black-base? inverted-base))
            inverted-base-name]
           [else #f])]
@@ -938,11 +960,17 @@
         1.0)))
 
 ;; returns the user's preferred color, wrt to the current color scheme
-(define (lookup-in-color-scheme color-name)
+(define (lookup-in-color-scheme color-name #:wob? [wob? (white-on-black-color-scheme?)])
   (lookup-in-color-scheme/given-mapping 
    color-name
    (preferences:get (color-scheme-entry-name->pref-name color-name))
-   (get-current-color-scheme)))
+   (get-current-color-scheme #:wob? wob?)))
+
+(define (lookup-in-given-color-scheme color-name color-scheme)
+  (lookup-in-color-scheme/given-mapping 
+   color-name
+   (preferences:get (color-scheme-entry-name->pref-name color-name))
+   color-scheme))
 
 (define (lookup-in-color-scheme/given-mapping color-name table a-color-scheme)
   (cond
@@ -968,7 +996,7 @@
 ;; set-color : symbol (or/c string? (is-a?/c color%) (is-a?/c style-delta%)) -> void
 (define (set-in-color-scheme color-name clr/sd)
   (define table (preferences:get (color-scheme-entry-name->pref-name color-name)))
-  (define current-color-scheme (get-current-color-scheme))
+  (define current-color-scheme (get-current-color-scheme #:wob? (white-on-black-color-scheme?)))
   (define scheme-name (color-scheme-name current-color-scheme))
   (define new-table
     (cond
@@ -999,21 +1027,22 @@
        (= (send c1 blue) (send c2 blue))
        (= (send c1 alpha) (send c2 alpha))))
 
-(define (get-current-color-scheme)
-  ;; if pref not recognized, return a color scheme
-  ;; based on white-on-black-panel-scheme? so that
+(define (get-current-color-scheme #:wob? wob?)
+  ;; if pref is not recognized as an existing color scheme name,
+  ;; return one of the two original color schemes so that
   ;; if some color scheme goes away, we have some
   ;; reasonable backup plan (and, if it comes back
   ;; we don't lose the prefs)
-  (define pref-val (preferences:get 'framework:color-scheme))
+  (define pref-name (if wob? 'framework:color-scheme-dark 'framework:color-scheme-light))
+  (define pref-val (preferences:get pref-name))
   (define found-color-scheme (lookup-color-scheme pref-val))
   (cond
     [found-color-scheme found-color-scheme]
-    [(white-on-black-panel-scheme?) (cadr known-color-schemes)]
-    [else (car known-color-schemes)]))
+    [wob? (built-in-wob-color-scheme)]
+    [else (built-in-color-scheme)]))
 
-(define (get-current-color-scheme-name)
-  (color-scheme-name (get-current-color-scheme)))
+(define (get-current-color-scheme-name #:wob? [wob? (white-on-black-color-scheme?)])
+  (color-scheme-name (get-current-color-scheme #:wob? wob?)))
 
 ;; string -> (or/c #f color-scheme?)
 (define (lookup-color-scheme name)
@@ -1021,44 +1050,48 @@
     (and (equal? name (color-scheme-name known-color-scheme))
          known-color-scheme)))
 
-(define (set-current-color-scheme name [avoid-shortcircuit? #f])
+(define (built-in-wob-color-scheme) (list-ref known-color-schemes 1))
+(define (built-in-color-scheme) (list-ref known-color-schemes 0))
+
+(define (set-current-color-scheme name)
   (define color-scheme
     (or (for/or ([known-color-scheme (in-list known-color-schemes)])
           (and (equal? name (color-scheme-name known-color-scheme))
                known-color-scheme))
         (car known-color-schemes)))
-  (when (or avoid-shortcircuit?
-            (not (equal? (color-scheme-name color-scheme)
-                         (color-scheme-name (get-current-color-scheme)))))
-    (preferences:set 'framework:color-scheme name)
-    (define old-wob (preferences:get 'framework:white-on-black?))
-    (define new-wob (color-scheme-white-on-black-base? color-scheme))
-    (unless (equal? old-wob new-wob)
-      (preferences:set 'framework:white-on-black? new-wob)
-      (if new-wob
-          (white-on-black)
-          (black-on-white)))
-    (define style-lists-begun '())
-    (dynamic-wind
-     (λ ()
-       (set! style-lists-begun
-             (for*/list ([(color-name fns+sls) (in-hash color-change-callbacks)]
-                         [fn+sl (in-list fns+sls)])
-               (define sl/b (cdr fn+sl))
-               (define sl (if (weak-box? sl/b)
-                              (weak-box-value sl/b)
-                              sl/b))
-               (and sl (send sl begin-style-change-sequence) sl))))
-     (λ ()
-       (for ([(color-name fns+sls) (in-hash color-change-callbacks)])
-         (for ([fn/b (in-list (map car fns+sls))])
-           (define fn (if (weak-box? fn/b) (weak-box-value fn/b) fn/b))
-           (when fn
-             (fn (lookup-in-color-scheme color-name))))))
-     (λ ()
-       (for ([style-list (in-list style-lists-begun)])
-         (when style-list
-           (send style-list end-style-change-sequence)))))))
+  (preferences:set (if (color-scheme-white-on-black-base? color-scheme)
+                       'framework:color-scheme-dark
+                       'framework:color-scheme-light)
+                   (color-scheme-name color-scheme))
+  (when (equal? (color-scheme-white-on-black-base? color-scheme)
+                (white-on-black-color-scheme?))
+    (change-colors-to-match-color-scheme color-scheme)))
+
+(define (change-colors-to-match-color-scheme color-scheme)
+  (if (color-scheme-white-on-black-base? color-scheme)
+      (white-on-black)
+      (black-on-white))
+  (define style-lists-begun '())
+  (dynamic-wind
+   (λ ()
+     (set! style-lists-begun
+           (for*/list ([(color-name fns+sls) (in-hash color-change-callbacks)]
+                       [fn+sl (in-list fns+sls)])
+             (define sl/b (cdr fn+sl))
+             (define sl (if (weak-box? sl/b)
+                            (weak-box-value sl/b)
+                            sl/b))
+             (and sl (send sl begin-style-change-sequence) sl))))
+   (λ ()
+     (for ([(color-name fns+sls) (in-hash color-change-callbacks)])
+       (for ([fn/b (in-list (map car fns+sls))])
+         (define fn (if (weak-box? fn/b) (weak-box-value fn/b) fn/b))
+         (when fn
+           (fn (lookup-in-given-color-scheme color-name color-scheme))))))
+   (λ ()
+     (for ([style-list (in-list style-lists-begun)])
+       (when style-list
+         (send style-list end-style-change-sequence))))))
 
 (define (get-available-color-schemes) 
   (for/list ([(name a-color-scheme) (in-hash known-color-schemes)])
@@ -1087,10 +1120,11 @@
             fn]
            [else (car wb/f)]))
        (when fn
-         (fn (lookup-in-color-scheme/given-mapping 
+         (fn (lookup-in-color-scheme/given-mapping
               color
               ht
-              (get-current-color-scheme)))))))
+              (get-current-color-scheme
+               #:wob? (white-on-black-color-scheme?))))))))
   (void))
 
 ;; we remove elements of the list when the function isn't reachable anymore
@@ -1199,6 +1233,32 @@
     (define init-value (lookup-in-color-scheme name))
     (editor:set-standard-style-list-delta style-name init-value)))
 
+(define color-scheme-examples-parents '())
+(define (update-dark-light-preferences-panel-ordering dark-should-be-first?)
+  (for ([color-scheme-examples-parent (in-list color-scheme-examples-parents)])
+    (define dark-is-first?
+      (let loop ([area (car (send color-scheme-examples-parent get-children))])
+        (cond
+          [(is-a? area message%)
+           (equal? (send area get-label) (string-constant dark-color-scheme))]
+          [(is-a? area area-container<%>)
+           (for/or ([area (in-list (send area get-children))])
+             (loop area))]
+          [else #f])))
+    (unless (equal? dark-should-be-first? dark-is-first?)
+      (send color-scheme-examples-parent
+            change-children
+            reverse))))
+
+(preferences:add-callback
+ 'framework:white-on-black-mode?
+ (λ (p v)
+   (update-dark-light-preferences-panel-ordering
+    (match v
+      ['platform (white-on-black-panel-scheme?)]
+      [#t #t]
+      [#f #f]))))
+
 (define (add-color-scheme-preferences-panel #:extras [extras void])
   (preferences:add-panel
    (list (string-constant preferences-colors)
@@ -1208,61 +1268,156 @@
        (new-vertical-panel% 
             [parent parent]
             [style '(auto-vscroll)]))
-     (extras vp)
-     (define buttons
-       (for/list ([color-scheme (in-list known-color-schemes)])
-         (define hp (new-horizontal-panel% 
-                         [parent vp]
-                         [alignment '(left top)]
-                         [stretchable-height #t]))
+     (define top-hp (new-horizontal-panel%
+                     [parent vp]
+                     [stretchable-height #f]
+                     [alignment '(center center)]))
+     (define top-hp2 (new-horizontal-panel%
+                      [parent vp]
+                      [stretchable-height #f]
+                      [alignment '(center center)]))
+     (define white-on-black-mode-choice
+       (case (system-type)
+         [(windows)
+          (new choice%
+               [parent top-hp]
+               [label (string-constant color-mode)]
+               [choices (list (string-constant light-mode)
+                              (string-constant dark-mode))]
+               [selection (if (preferences:get 'framework:white-on-black-mode?) 1 0)]
+               [callback
+                (λ (_1 _2)
+                  (preferences:set 'framework:white-on-black-mode?
+                                   (match (send white-on-black-mode-choice get-selection)
+                                     [0 #f]
+                                     [1 #t])))])]
+         [else
+          (new choice%
+               [parent top-hp]
+               [label (string-constant color-mode)]
+               [choices (list (string-constant use-os-dark-mode-selection)
+                              (string-constant always-light-mode)
+                              (string-constant always-dark-mode))]
+               [callback
+                (λ (_1 _2)
+                  (preferences:set 'framework:white-on-black-mode?
+                                   (match (send white-on-black-mode-choice get-selection)
+                                     [0 'platform]
+                                     [1 #f]
+                                     [2 #t])))])]))
+     (case (system-type)
+       [(windows)
+        (preferences:add-callback
+         'framework:white-on-black-mode?
+         (λ (_1 val)
+           (send white-on-black-mode-choice
+                 set-selection
+                 (if val 1 0))))]
+       [else
+        (preferences:add-callback
+         'framework:white-on-black-mode?
+         (λ (_1 val)
+           (send white-on-black-mode-choice
+                 set-selection
+                 (match val
+                   ['platform 0]
+                   [#t 2]
+                   [#f 1]))))])
+
+     (define color-scheme-examples-vp
+       (new-vertical-panel%
+        [spacing 10]
+        [border 10]
+        [parent vp]))
+     (set! color-scheme-examples-parents
+           (cons
+            color-scheme-examples-vp
+            color-scheme-examples-parents))
+     (define (mk-color-scheme-radio-buttons white-on-black? radio-panel pref-sym)
+       (for ([color-scheme (in-list known-color-schemes)]
+             #:when (equal? white-on-black? (color-scheme-white-on-black-base? color-scheme)))
+         (define vp (new-vertical-panel%
+                     [parent radio-panel]
+                     [alignment '(left top)]
+                     [stretchable-height #f]))
+         (define label (new radio-box%
+                            [parent vp]
+                            [label #f]
+                            [selection
+                             (if (equal? (preferences:get pref-sym)
+                                         (color-scheme-name color-scheme))
+                                 0
+                                 #f)]
+                            [callback
+                             (λ (_1 _2)
+                               (preferences:set
+                                pref-sym
+                                (color-scheme-name color-scheme)))]
+                            [choices (list (color-scheme-button-label color-scheme))]))
+         (preferences:add-callback
+          pref-sym
+          (λ (p v)
+            (send label set-selection
+                  (if (equal? v (color-scheme-name color-scheme))
+                      0
+                      #f))))
          (define t (new racket:text%))
          (define str (color-scheme-example color-scheme))
          (send t insert str)
-         (define ec (new editor-canvas% 
-                         [parent hp]
-                         [style '(auto-hscroll no-vscroll)]
+         (define inner-hp (new-horizontal-panel%
+                           [parent vp]
+                           [stretchable-height #f]))
+         (define spacer (new panel%
+                             [parent inner-hp]
+                             [stretchable-width #f]))
+         (send spacer min-width 40)
+         (define ec (new editor-canvas%
+                         [parent inner-hp]
+                         [style '(no-border auto-hscroll no-vscroll)]
                          [editor t]))
-         (define (update-colors defaults?)
-           (define bkg-name 'framework:basic-canvas-background)
-           (send ec set-canvas-background
-                 (lookup-in-color-scheme/given-mapping 
-                  bkg-name
-                  (if defaults?
-                      (hash)
-                      (preferences:get (color-scheme-entry-name->pref-name bkg-name)))
-                  color-scheme))
-           (send t set-style-list (color-scheme->style-list color-scheme defaults?)))
          (send ec set-line-count (+ 1 (for/sum ([c (in-string str)])
                                         (if (equal? c #\newline)
                                             1
                                             0))))
-         (define bp (new-vertical-panel% [parent hp] 
-                         [stretchable-height #f]
-                         [stretchable-width #f]))
-         (define defaults? #f)
-         (define btn
-           (new button%
-                [label (color-scheme-button-label color-scheme)]
-                [parent bp]
-                [callback (λ (x y) 
-                            (set-current-color-scheme
-                             (color-scheme-name color-scheme))
-                            (when (and default-checkbox
-                                       (send default-checkbox get-value))
-                              (revert-to-color-scheme-defaults color-scheme)))]))
-         (define default-checkbox
-           (new check-box%
-                [stretchable-width #t]
-                [label "Revert to\ndefault colors"]
-                [parent bp]
-                [callback
-                 (λ (x y)
-                   (update-colors (send default-checkbox get-value)))]))
-         (update-colors #f)
-         btn))
-     (define wid (apply max (map (λ (x) (send x get-width)) buttons)))
-     (for ([b (in-list buttons)])
-       (send b min-width wid))
+         (define bkg-name 'framework:basic-canvas-background)
+         (send ec set-canvas-background
+               (lookup-in-color-scheme/given-mapping
+                bkg-name
+                (preferences:get (color-scheme-entry-name->pref-name bkg-name))
+                color-scheme))
+         (send t set-style-list (color-scheme->style-list color-scheme #f))))
+
+     (define dark-panel (new vertical-panel%
+                             [parent color-scheme-examples-vp]
+                             [stretchable-height #f]
+                             [style '(border)]))
+     (define light-panel (new vertical-panel%
+                              [parent color-scheme-examples-vp]
+                              [stretchable-height #f]
+                              [style '(border)]))
+     (new message%
+          [parent dark-panel]
+          [label (string-constant dark-color-scheme)])
+     (new message%
+          [parent light-panel]
+          [label (string-constant light-color-scheme)])
+     (mk-color-scheme-radio-buttons #t dark-panel 'framework:color-scheme-dark)
+     (mk-color-scheme-radio-buttons #f light-panel 'framework:color-scheme-light)
+
+     (update-dark-light-preferences-panel-ordering
+      (white-on-black-color-scheme?))
+
+     (define revert-button%
+       (new button%
+            [label (string-constant revert-colors-to-color-scheme-defaults)]
+            [parent vp]
+            [callback
+             (λ (x y)
+               (revert-to-color-scheme-defaults
+                (get-current-color-scheme
+                 #:wob?
+                 (white-on-black-color-scheme?))))]))
+     (extras vp)
      (void))))
 
 (define (revert-to-color-scheme-defaults color-scheme)

@@ -15,7 +15,8 @@
          (for-syntax racket/base))
 
 (provide 
- (protect-out tab-panel%))
+ (protect-out tab-panel%
+              tab-panel-available?))
 
 (define-runtime-path psm-tab-bar-dir
   '(so "PSMTabBarControl.framework"))
@@ -29,23 +30,29 @@
        (directory-exists? mm-tab-bar-dir)))
 
 ;; Load MMTabBarView or PSMTabBarControl:
-(if use-mm?
-    (void (ffi-lib (build-path mm-tab-bar-dir "MMTabBarView")))
-    (void (ffi-lib (build-path psm-tab-bar-dir "PSMTabBarControl"))))
+(define tab-ok?
+  (if use-mm?
+      (and (ffi-lib (build-path mm-tab-bar-dir "MMTabBarView") #:fail (lambda () #f))
+           'mm)
+      (and (ffi-lib (build-path psm-tab-bar-dir "PSMTabBarControl") #:fail (lambda () #f))
+           'psm)))
+(define (tab-panel-available?) tab-ok?)
+
 (define NSNoTabsNoBorder 6)
 
 (define NSDefaultControlTint 0)
 (define NSClearControlTint 7)
 
-(import-class NSView NSTabView NSTabViewItem)
+(import-class NSView NSTabView NSTabViewItem NSSegmentedControl)
 (define TabBarControl
-  (if use-mm?
-      (let ()
-        (import-class MMTabBarView)
-        MMTabBarView)
-      (let ()
-        (import-class PSMTabBarControl)
-        PSMTabBarControl)))
+  (cond
+    [(not tab-ok?) #f]
+    [use-mm?
+     (import-class MMTabBarView)
+     MMTabBarView]
+    [else
+     (import-class PSMTabBarControl)
+     PSMTabBarControl]))
 (import-protocol NSTabViewDelegate)
 
 (define NSOrderedAscending -1)
@@ -119,6 +126,7 @@
         labels)
   (inherit get-cocoa register-as-child
            is-window-enabled?
+           is-enabled-to-root?
            block-mouse-events
            refresh)
 
@@ -161,11 +169,17 @@
              (tellv i setResizeTabsToFitTotalWidth: #:type _BOOL #t))
            i)))
 
+  (define content-cocoa
+    (as-objc-allocation
+     (tell (tell NSView alloc)
+           initWithFrame: #:type _NSRect (tell #:type _NSRect tabv-cocoa contentRect))))
+
   (define item-cocoas
     (for/list ([lbl (in-list labels)])
       (let ([item (as-objc-allocation
                    (tell (tell NSTabViewItem alloc) initWithIdentifier: #f))])
         (tellv item setLabel: #:type _NSString (label->plain-label lbl))
+        (tellv item setView: content-cocoa)
         (when (and has-close?
                    use-mm?)
           (tellv item setHasCloseButton: #:type _BOOL #t))
@@ -178,12 +192,6 @@
         (tellv tabv-cocoa setFrame: #:type _NSRect (make-NSRect (make-init-point x y) sz))
         (tellv tabv-cocoa setDelegate: tabv-cocoa)))
   
-  (define content-cocoa 
-    (as-objc-allocation
-     (tell (tell NSView alloc)
-           initWithFrame: #:type _NSRect (tell #:type _NSRect tabv-cocoa contentRect))))
-  (tellv tabv-cocoa addSubview: content-cocoa)
-
   (define/override (get-cocoa-content) content-cocoa)
   (define/override (get-cocoa-cursor-content) tabv-cocoa)
   (define/override (set-size x y w h)
@@ -234,6 +242,7 @@
     (let ([item (as-objc-allocation
                  (tell (tell NSTabViewItem alloc) initWithIdentifier: #f))])
       (tellv item setLabel: #:type _NSString (label->plain-label lbl))
+      (tellv item setView: content-cocoa)
       (when (and has-close?
                  use-mm?)
         (tellv item setHasCloseButton: #:type _BOOL #t))
@@ -272,7 +281,7 @@
   (super-new [parent parent]
              [cocoa cocoa]
              [no-show? (memq 'deleted style)])
-  
+
   (when control-cocoa
     (set-ivar! control-cocoa wxb (->wxb this)))
 
@@ -284,7 +293,17 @@
              (if on? NSDefaultControlTint NSClearControlTint))
       (when control-cocoa
         (unless use-mm?
-          (tellv control-cocoa setEnabled: #:type _BOOL on?)))))
+          (tellv control-cocoa seteEnabled: #:type _BOOL on?)))
+      (when (version-26.0-or-later?)
+        (when (eq? cocoa tabv-cocoa)
+          (let ([subviews (tell cocoa subviews)])
+            (for ([i (in-range 0 (tell #:type _NSUInteger subviews count))])
+              (define c (tell subviews objectAtIndex: #:type _NSUInteger i))
+              (when (tell #:type _BOOL c isKindOfClass: (tell NSSegmentedControl class))
+                (tellv c setEnabled: #:type _BOOL on?))))))))
+
+  (unless (is-enabled-to-root?)
+    (enable-window #f))
 
   (define/override (can-accept-focus?)
     (and (not control-cocoa)

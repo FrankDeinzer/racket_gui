@@ -10,7 +10,8 @@
           "utils.rkt"
           "types.rkt"
           "image.rkt"
-          "color.rkt")
+          "color.rkt"
+          "liquid-glass.rkt")
 
 (provide
  (protect-out message%))
@@ -116,6 +117,16 @@
              [callback void]
              [no-show? (memq 'deleted style)])
 
+  (define/override (get-margin-adjustments) (values 0
+                                                    (if (or liquid-glass?
+                                                            (not (version-10.9-or-later?)))
+                                                        0
+                                                        -3)
+                                                    0
+                                                    (if liquid-glass?
+                                                        -5
+                                                        0)))
+
   (define/override (set-label label)
     (set! text-label? (string? label))
     (cond
@@ -129,6 +140,26 @@
   (define/public (set-preferred-size)
     (tellv (get-cocoa) sizeToFit)
     #t)
+
+  (define b-margin
+    (if liquid-glass?
+        4
+        0))
+
+  (define/override (get-frame)
+    (define r (super get-frame))
+    (cond
+      [(= b-margin 0)
+       r]
+      [else
+       (define p (NSRect-origin r))
+       (define s (NSRect-size r))
+       (make-NSRect p
+                    (make-NSSize (NSSize-width s)
+                                 (+ (NSSize-height s) b-margin)))]))
+
+  (define/override (set-frame x y w h)
+    (super set-frame x y w (max 0 (- h b-margin))))
 
   (define/public (get-color) color)
   (define/public (set-color c)

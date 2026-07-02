@@ -9,7 +9,8 @@
          "const.rkt"
          "window.rkt"
          "../common/event.rkt"
-         "image.rkt")
+         "image.rkt"
+         "liquid-glass.rkt")
 
 (provide 
  (protect-out button%
@@ -110,6 +111,16 @@
               (NSRect-origin f)
               (make-NSSize (+ (NSSize-width (NSRect-size f)) 2)
                            (+ (NSSize-height (NSRect-size f)) 4))))))
+
+  (define/override (get-margin-adjustments)
+    (if liquid-glass?
+        (if (eq? event-type 'check-box)
+            (values 1 1 1 1)
+            (values 5 5 5 5))
+        (if (and (eq? event-type 'check-box)
+                 (version-10.9-or-later?))
+            (values 0 0 0 4)
+            (values 0 0 0 0))))
   
   (define-values (cocoa image-cocoa)
     (if (and button-type

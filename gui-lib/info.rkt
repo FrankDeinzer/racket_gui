@@ -5,7 +5,7 @@
 (define deps '("srfi-lite-lib"
                "data-lib"
                ["icons" #:version "1.3"]
-               ["base" #:version "8.3.0.3"]
+               ["base" #:version "9.0.0.6"]
                ["syntax-color-lib" #:version "1.7"]
                ["draw-lib" #:version "1.18"]
                ["snip-lib" #:version "1.6"]
@@ -13,7 +13,7 @@
                "pict-lib"
                "scheme-lib"
                ["scribble-lib" #:version "1.36"]
-               ["string-constants-lib" #:version "1.41"]
+               ["string-constants-lib" #:version "1.56"]
                "option-contract-lib"
                "2d-lib"
                "compatibility-lib"
@@ -35,7 +35,7 @@
 
 (define pkg-authors '(mflatt robby))
 
-(define version "1.78")
+(define version "1.80")
 
 (define license
   '(Apache-2.0 OR MIT))

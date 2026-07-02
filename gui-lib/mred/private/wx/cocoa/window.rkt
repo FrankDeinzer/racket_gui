@@ -41,6 +41,8 @@
 
 (define-local-member-name flip-client)
 
+(define got null)
+
 ;; ----------------------------------------
 
 (define special-control-key? #f)
@@ -617,7 +619,7 @@
     (set-ivar! cocoa wxb (->wxb this))
 
     (unless no-show?
-      (show #t)) 
+      (show #t))
 
     (define/public (focus-is-on on?)
       (void))
@@ -734,9 +736,28 @@
     (define/public (block-mouse-events block?)
       (set! block-all-mouse-events? block?))
 
-    (define/private (get-frame)
-      (let ([v (tell #:type _NSRect cocoa frame)])
-        v))
+    (define/public (is-group?) #f)
+
+    (define/public (get-margin-adjustments) (values 0 0 0 0))
+
+    (define/public (get-frame)
+      (tellv cocoa layoutSubtreeIfNeeded)
+      (define r (tell #:type _NSRect cocoa frame))
+      (define-values (lm tm rm bm) (get-margin-adjustments))
+      (cond
+        [(= 0 lm tm rm bm) r]
+        [else
+         (define p (NSRect-origin r))
+         (define s (NSRect-size r))
+         (make-NSRect (make-NSPoint (- (NSPoint-x p) lm)
+                                    (- (NSPoint-y p) tm))
+                      (make-NSSize (+ (NSSize-width s) lm rm)
+                                   (+ (NSSize-height s) tm bm)))]))
+
+    (define/public (set-frame x y w h)
+      (define-values (lm tm rm bm) (get-margin-adjustments))
+      (tellv cocoa setFrame: #:type _NSRect (make-NSRect (make-NSPoint (+ x lm) (flip (+ y tm) (- h tm bm)))
+                                                         (make-NSSize (max 0 (- w lm rm)) (max 0 (- h tm bm))))))
 
     (define/public (flip y h)
       (if parent
@@ -797,6 +818,7 @@
 
     (define/public (get-client-size w h)
       ;; May be called in Cocoa event-handling mode
+      (tellv (get-cocoa-content) layoutSubtreeIfNeeded)
       (let ([s (NSRect-size (tell #:type _NSRect (get-cocoa-content) bounds))])
         (set-box! w (->long (ceiling (NSSize-width s))))
         (set-box! h (->long (ceiling (NSSize-height s))))))
@@ -806,8 +828,7 @@
             [y (if (not y) (get-y) y)])
         ;; old location will need refresh:
         (tellv cocoa setNeedsDisplay: #:type _BOOL #t)
-        (tellv cocoa setFrame: #:type _NSRect (make-NSRect (make-NSPoint x (flip y h))
-                                                           (make-NSSize w h)))
+        (set-frame x y w h)
         ;; new location needs refresh:
         (tellv cocoa setNeedsDisplay: #:type _BOOL #t))
       (queue-on-size))
