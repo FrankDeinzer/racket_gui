@@ -7,11 +7,20 @@
          "menu.rkt"
          "utils.rkt")
 
-(provide menu-bar%)
+(provide menu-bar%
+         debug-get-appended-menu)
 
 ; Register the is-a? predicate so menu.rkt can walk up to find the frame
 ; without a circular dependency.
 (register-menu-bar-predicate! (lambda (x) (and x (is-a? x menu-bar%))))
+
+; W3 measurement (prompt08072026-2): captures the wx-level menu% for each
+; appended top-level bar title, keyed by title, so a debug script can call its
+; existing `popup` method directly on the SAME QMenu instance embedded in the
+; real QMenuBar — bypassing QMenuBar's click activation entirely. Gated behind
+; PLT_QT_DEBUG; empty/unused otherwise. Measurement-only, not a platform API.
+(define debug-appended-menus (make-hash))
+(define (debug-get-appended-menu title) (hash-ref debug-appended-menus title #f))
 
 (define menu-bar%
   (class window%
@@ -40,7 +49,9 @@
       ; as `title`, not as popup-label), so set it now or the bar item is
       ; zero-width and the whole bar collapses to height 0.
       (shim_menu_set_title (send menu get-qt-menu) title)
-      (shim_menubar_add_menu qt-menubar (send menu get-qt-menu)))
+      (shim_menubar_add_menu qt-menubar (send menu get-qt-menu))
+      (when (getenv "PLT_QT_DEBUG")
+        (hash-set! debug-appended-menus title menu)))
 
     ; ---- enable-top ---------------------------------------------------------
     (define/public (enable-top pos on?)
