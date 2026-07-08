@@ -66,6 +66,12 @@
     (define/public (set-title s)
       (shim_window_set_title qt-handle s))
 
+    (define/public set-icon
+      (case-lambda
+        [(i) (void)]
+        [(i b) (void)]
+        [(i b l?) (void)]))
+
     ; Default: allow close; wxtop.rkt overrides to ask mred wrapper
     (define/override (on-close)           #t)
     ; on-activate, display-changed: override* targets in make-top-level-window-glue%
