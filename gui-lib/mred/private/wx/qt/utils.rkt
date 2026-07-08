@@ -35,6 +35,7 @@
          shim_menubar_enable_at
          shim_menubar_remove_at
          shim_menu_create
+         shim_menu_set_title
          shim_menu_add_submenu
          shim_menu_add_separator
          shim_menu_remove_action
@@ -210,6 +211,10 @@
 (define shim_menu_create
   (get-ffi-obj "shim_menu_create" shim-lib
                (_fun _string/utf-8 -> _pointer)))
+
+(define shim_menu_set_title
+  (get-ffi-obj "shim_menu_set_title" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
 
 (define shim_menu_add_submenu
   (get-ffi-obj "shim_menu_add_submenu" shim-lib

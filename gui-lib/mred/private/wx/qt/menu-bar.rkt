@@ -35,6 +35,11 @@
     (define/public (append menu title)
       ; Tell the menu who its parent is so action callbacks can find the frame.
       (send menu set-parent this)
+      ; QMenuBar::addMenu derives the bar item's text from the menu's title;
+      ; a top-level menu% is created with an empty title (its label arrives here
+      ; as `title`, not as popup-label), so set it now or the bar item is
+      ; zero-width and the whole bar collapses to height 0.
+      (shim_menu_set_title (send menu get-qt-menu) title)
       (shim_menubar_add_menu qt-menubar (send menu get-qt-menu)))
 
     ; ---- enable-top ---------------------------------------------------------
