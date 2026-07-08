@@ -79,7 +79,7 @@
                             (queue-event (send frame get-eventspace)
                               (lambda ()
                                 (send frame on-menu-command id))))))])
-              (shim_action_create label (if checkable? 1 0) cb #f))))
+              (shim_action_create qt-menu label (if checkable? 1 0) cb #f))))
       (hash-set! item-table id action)
       (order-push! id action))
 

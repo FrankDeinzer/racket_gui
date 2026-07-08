@@ -40,6 +40,7 @@
          shim_menu_add_separator
          shim_menu_remove_action
          shim_menu_popup
+         shim_menu_debug_dump
          shim_action_create
          shim_action_set_enabled
          shim_action_set_label
@@ -232,11 +233,17 @@
   (get-ffi-obj "shim_menu_popup" shim-lib
                (_fun _pointer _int _int -> _void)))
 
+; Gated (PLT_QT_DEBUG) on-demand dump of a QMenu's actions().size() and
+; per-action enabled/checked state to stderr. No-op if the env var is unset.
+(define shim_menu_debug_dump
+  (get-ffi-obj "shim_menu_debug_dump" shim-lib
+               (_fun _pointer -> _void)))
+
 ; ---- action -----------------------------------------------------------------
 
 (define shim_action_create
   (get-ffi-obj "shim_action_create" shim-lib
-               (_fun _string/utf-8 _int _callback_t _pointer -> _pointer)))
+               (_fun _pointer _string/utf-8 _int _callback_t _pointer -> _pointer)))
 
 (define shim_action_set_enabled
   (get-ffi-obj "shim_action_set_enabled" shim-lib
