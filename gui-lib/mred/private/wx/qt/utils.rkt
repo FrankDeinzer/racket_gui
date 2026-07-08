@@ -18,6 +18,7 @@
          shim_window_set_menubar
          shim_widget_set_geometry
          shim_widget_set_focus
+         shim_widget_client_to_screen
          shim_canvas_create
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
@@ -136,6 +137,15 @@
 (define shim_widget_set_focus
   (get-ffi-obj "shim_widget_set_focus" shim-lib
                (_fun _pointer -> _void)))
+
+; QWidget::mapToGlobal(QPoint(x,y)) -> (values screen-x screen-y).
+(define shim_widget_client_to_screen
+  (get-ffi-obj "shim_widget_client_to_screen" shim-lib
+               (_fun _pointer _int _int
+                     (out-x : (_ptr o _int))
+                     (out-y : (_ptr o _int))
+                     -> _void
+                     -> (values out-x out-y))))
 
 (define shim_canvas_create
   (get-ffi-obj "shim_canvas_create" shim-lib

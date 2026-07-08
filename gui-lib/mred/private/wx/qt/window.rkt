@@ -17,7 +17,8 @@
 ;   - platform-level stubs for callbacks (on-set-focus etc.)
 (require racket/class
          "../common/queue.rkt"
-         "../common/event.rkt")
+         "../common/event.rkt"
+         "utils.rkt")
 
 (provide window%
          qt-queue-window-event
@@ -135,12 +136,16 @@
     (define/public (get-dialog-level) 0)
     (define/public (frame-relative-dialog-status win) #f)
     ; show-control: NOT here — added by make-top-container% (wxtop.rkt) via public*
-    ; ⚑ FLAG: no shim query for a widget's global/screen position yet
-    ; (win32/gtk use HWND/GTK screen APIs). client-to-screen is a no-op, so
-    ; popup-menu below opens at the given local coordinates rather than the
-    ; true screen position. Revisit if placement matters (e.g. right-click
-    ; menus land in the wrong spot); doesn't crash, just mispositions.
-    (define/public (client-to-screen xb yb) (void))
+    ; client-to-screen: QWidget::mapToGlobal via shim_widget_client_to_screen
+    ; (prompt08072026-3). screen-to-client remains a no-op — only used by the
+    ; wx/proxy<%> sibling-remapping path (wxwindow.rkt), not exercised by any
+    ; widget this backend implements yet.
+    (define/public (client-to-screen xb yb)
+      (when handle
+        (define-values (gx gy)
+          (shim_widget_client_to_screen handle (unbox xb) (unbox yb)))
+        (set-box! xb gx)
+        (set-box! yb gy)))
     (define/public (screen-to-client xb yb) (void))
     (define/public (popup-menu m x y)
       (let ([gx (box x)] [gy (box y)])
