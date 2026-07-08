@@ -31,7 +31,10 @@
     (define/public (set-border on?)  (void))
     (define/public (set-value v)     (void))
     (define/public (get-value)       #f)
-    (define/public (set-label lbl)    (void))
+    ; variadic: button-style callers pass (label); tab-panel%'s get-tab-widget
+    ; path (mrpanel.rkt) passes (index label) since tab-panel-available? => #t
+    ; claims a native tab widget -- mirrors `append`'s rest-arg treatment above.
+    (define/public (set-label . args) (void))
     (define/public (get-label)        "")
     (define/public (set-selection i) (void))
     (define/public (get-selection)   -1)
