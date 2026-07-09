@@ -14,7 +14,7 @@
 ; without a circular dependency.
 (register-menu-bar-predicate! (lambda (x) (and x (is-a? x menu-bar%))))
 
-; W3 measurement (prompt08072026-2): captures the wx-level menu% for each
+; W3 measurement (2026-07-08_prompt-2): captures the wx-level menu% for each
 ; appended top-level bar title, keyed by title, so a debug script can call its
 ; existing `popup` method directly on the SAME QMenu instance embedded in the
 ; real QMenuBar — bypassing QMenuBar's click activation entirely. Gated behind

@@ -137,7 +137,7 @@
     (define/public (frame-relative-dialog-status win) #f)
     ; show-control: NOT here — added by make-top-container% (wxtop.rkt) via public*
     ; client-to-screen: QWidget::mapToGlobal via shim_widget_client_to_screen
-    ; (prompt08072026-3). screen-to-client remains a no-op — only used by the
+    ; (2026-07-08_prompt-3). screen-to-client remains a no-op — only used by the
     ; wx/proxy<%> sibling-remapping path (wxwindow.rkt), not exercised by any
     ; widget this backend implements yet.
     (define/public (client-to-screen xb yb)
