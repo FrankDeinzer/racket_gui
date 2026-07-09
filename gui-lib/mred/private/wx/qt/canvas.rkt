@@ -39,6 +39,11 @@
         (set-box! hb (max 1 (shim_canvas_get_height hdl)))))
 
     (define/override (queue-backing-flush)
+      ; Redraw-bug measurement (2026-07-09_prompt), discriminator 3: does
+      ; on-backing-flush actually hand us a bitmap (full repaint happened),
+      ; or does nothing arrive (nothing-to-draw-proc, e.g. no-op erase)?
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-dc] queue-backing-flush called\n"))
       (on-backing-flush
        (lambda (bm)
          (when (is-a? bm bitmap%)
@@ -46,9 +51,14 @@
                   [h    (send bm get-height)]
                   [buf  (make-bytes (* w h 4))]
                   [hdl  (send qt-canvas get-handle)])
+             (when (getenv "PLT_QT_DEBUG")
+               (eprintf "[qt-dc] on-backing-flush proc fired, bm=~ax~a\n" w h))
              (send bm get-argb-pixels 0 0 w h buf #f #t)
              (shim_canvas_blit_argb    hdl buf w h (* w 4))
-             (shim_canvas_request_repaint hdl)))))
+             (shim_canvas_request_repaint hdl))))
+       (lambda ()
+         (when (getenv "PLT_QT_DEBUG")
+           (eprintf "[qt-dc] on-backing-flush: nothing-to-draw\n"))))
       (void))
 
     (super-new [transparent? #f])))
@@ -219,6 +229,8 @@
       (super show on?))
 
     (define/override (refresh)
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-canvas] refresh -> queue-paint\n"))
       (send this queue-paint))
 
     ; ---- extras required by make-item% and glue layer ----
@@ -249,9 +261,19 @@
         (get-client-size wb hb)
         (values (unbox wb) (unbox hb))))
 
-    (define/public (begin-refresh-sequence) (void))
-    (define/public (end-refresh-sequence)   (void))
+    (define/public (begin-refresh-sequence)
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-canvas] begin-refresh-sequence (no-op)\n")))
+    (define/public (end-refresh-sequence)
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-canvas] end-refresh-sequence (no-op)\n")))
+    ; Redraw-bug measurement (2026-07-09_prompt), discriminator 3: `flush'
+    ; calls request_repaint directly, bypassing queue-backing-flush/blit --
+    ; if this fires during typing, Qt repaints the existing (possibly stale)
+    ; backing instead of a freshly rendered one.
     (define/public (flush)
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-canvas] flush -> request_repaint (NO fresh blit)\n"))
       (shim_canvas_request_repaint qt-handle))
     (define bg-col (make-object color% "white"))
     (define/public (get-canvas-background) bg-col)
