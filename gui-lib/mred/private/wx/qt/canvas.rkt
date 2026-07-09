@@ -173,6 +173,12 @@
                [parent     parent]
                [eventspace the-eventspace])
 
+    ; Must exist before the set-size seed call below: that override now also
+    ; touches `dc' (reset-backing-retained), and set-size can run during
+    ; construction.
+    (define dc (new qt-dc% [qt-canvas this]))
+    (send dc start-backing-retained)
+
     ; Seed window%'s w/h from init args so get-size() is consistent with
     ; admin.get-view() before layout runs. Without this, make-editor-canvas%'s
     ; update-size computes (h - ch) < 0 when h=0 and ch=positive.
@@ -182,8 +188,6 @@
       (send this set-size (if (and (integer? x) (>= x 0)) x 0)
                           (if (and (integer? y) (>= y 0)) y 0)
                           w h))
-
-    (define dc (new qt-dc% [qt-canvas this]))
 
     ; ---- canvas-mixin required interface ----
 
@@ -217,7 +221,14 @@
         (shim_widget_set_geometry qt-handle
                                   (if (and x (>= x 0)) x 0)
                                   (if (and y (>= y 0)) y 0)
-                                  nw nh)))
+                                  nw nh)
+        ; The retained backing bitmap (start-backing-retained, above) is sized
+        ; from get-backing-size at its first get-cr call. Without a reset here,
+        ; a bitmap created before layout assigns the real size (e.g. a 1x1 or
+        ; 30x30 placeholder) would stay retained at that wrong size forever.
+        ; win32/gtk do the same on their own resize hooks (on-resized/
+        ; internal-on-client-size -> reset-dc -> reset-backing-retained).
+        (send dc reset-backing-retained)))
 
     (define/override (get-client-size wb hb)
       (set-box! wb (max 1 (shim_canvas_get_width  qt-handle)))
@@ -263,10 +274,12 @@
 
     (define/public (begin-refresh-sequence)
       (when (getenv "PLT_QT_DEBUG")
-        (eprintf "[qt-canvas] begin-refresh-sequence (no-op)\n")))
+        (eprintf "[qt-canvas] begin-refresh-sequence -> suspend-flush\n"))
+      (send dc suspend-flush))
     (define/public (end-refresh-sequence)
       (when (getenv "PLT_QT_DEBUG")
-        (eprintf "[qt-canvas] end-refresh-sequence (no-op)\n")))
+        (eprintf "[qt-canvas] end-refresh-sequence -> resume-flush\n"))
+      (send dc resume-flush))
     ; Redraw-bug measurement (2026-07-09_prompt), discriminator 3: `flush'
     ; calls request_repaint directly, bypassing queue-backing-flush/blit --
     ; if this fires during typing, Qt repaints the existing (possibly stale)
