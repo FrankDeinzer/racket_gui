@@ -68,6 +68,8 @@
     (set! ignore-click? #t)
     (for ([s (in-list choices)]) (shim_list_box_append qt-handle s))
     (set! ignore-click? #f)
+    ; After choices, not before: sizeHint() should reflect populated rows.
+    (send this seed-size-from-native-hint)
 
     ; ---- sizing ----
 

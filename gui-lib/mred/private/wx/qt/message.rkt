@@ -22,6 +22,7 @@
     (super-new [handle qt-handle]
                [parent parent]
                [eventspace (current-eventspace)])
+    (send this seed-size-from-native-hint)
 
     (define/override (set-size nx ny nw nh)
       (super set-size nx ny nw nh)

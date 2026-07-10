@@ -19,6 +19,7 @@
          shim_widget_set_geometry
          shim_widget_set_focus
          shim_widget_client_to_screen
+         shim_widget_get_size_hint
          shim_canvas_create
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
@@ -163,6 +164,17 @@
                      (out-y : (_ptr o _int))
                      -> _void
                      -> (values out-x out-y))))
+
+; QWidget::sizeHint() -> (values width height). Used by item-based widgets
+; (button%/message%/check-box%/list-box%) to seed window%'s w/h right after
+; construction (docs/HACKING.md §18.2).
+(define shim_widget_get_size_hint
+  (get-ffi-obj "shim_widget_get_size_hint" shim-lib
+               (_fun _pointer
+                     (out-w : (_ptr o _int))
+                     (out-h : (_ptr o _int))
+                     -> _void
+                     -> (values out-w out-h))))
 
 (define shim_canvas_create
   (get-ffi-obj "shim_canvas_create" shim-lib

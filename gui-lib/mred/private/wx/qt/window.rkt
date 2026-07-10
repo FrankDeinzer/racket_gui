@@ -161,6 +161,30 @@
     (define/public (get-top-frame)       this)
 
     ; ---- Qt-specific ----
+
+    ; Seeds w/h from QWidget::sizeHint() right after construction. win32/gtk
+    ; controls know their real size immediately after CreateWindowEx/
+    ; gtk_widget_size_request; our get-width/get-height only ever reflect a
+    ; *previous* set-size call, so without this seed they read 0 at the
+    ; point make-item% (wxitem.rkt) queries them right after construction
+    ; (docs/HACKING.md §18.2). Item-based widgets (button%/message%/
+    ; check-box%/list-box%) call this once after super-new; canvas% is
+    ; NOT a caller -- it already seeds itself from its own width/height
+    ; init args (2026-06-30), and calling this too would run before canvas%'s
+    ; `dc` field exists (dc: undefined; cannot use field before
+    ; initialization). Uses the existing set-size path (not a get-width/
+    ; get-height override), so it stays compatible with make-item%'s
+    ; same-dimension? cache.
+    (define/public (seed-size-from-native-hint)
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-window] seed-size-from-native-hint: pre-seed w=~a h=~a\n" w h))
+      (when (and handle (= w 0) (= h 0))
+        (define-values (hint-w hint-h) (shim_widget_get_size_hint handle))
+        (when (getenv "PLT_QT_DEBUG")
+          (eprintf "[qt-window] seed-size-from-native-hint: sizeHint=~ax~a\n" hint-w hint-h))
+        (when (and (> hint-w 0) (> hint-h 0))
+          (send this set-size #f #f hint-w hint-h))))
+
     (define/public (get-qt-handle)       handle)
     ; Returns the QWidget* that children should use as their Qt parent.
     ; frame% overrides to return the central widget; panel% to its own widget.

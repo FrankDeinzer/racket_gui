@@ -41,6 +41,7 @@
     (super-new [handle     qt-handle]
                [parent     parent]
                [eventspace the-eventspace])
+    (send this seed-size-from-native-hint)
 
     ; ---- sizing ----
 
