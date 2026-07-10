@@ -1,12 +1,15 @@
 #lang racket/base
 ; Qt platform module — exports platform-values for Racket's GUI toolkit.
-; Spike implementation: frame%, canvas%, button% are real; rest are stubs.
+; Spike implementation: frame%, canvas%, button%, check-box%, list-box% are
+; real; rest are stubs.
 (require racket/class
          racket/draw
          "../common/default-procs.rkt"
          "frame.rkt"
          "canvas.rkt"
          "button.rkt"
+         "check-box.rkt"
+         "list-box.rkt"
          "dialog.rkt"
          "panel.rkt"
          "window.rkt"
@@ -81,7 +84,7 @@
 ; ---- unimplemented stubs ---------------------------------------------------
 
 (define canvas-panel%  (make-stub-class 'canvas-panel%))
-(define check-box%     (make-stub-class 'check-box%))
+; check-box% is the real implementation (check-box.rkt); imported above
 (define choice%        (make-stub-class 'choice%))
 ; dialog% is the real implementation (dialog.rkt); imported above
 ; gauge%: non-erroring stub (visual-only progress bar, e.g. DrRacket splash)
@@ -97,7 +100,7 @@
     (define/public (get-value)   value)
     (define/public (set-value v) (set! value v))))
 (define group-panel%   (make-stub-class 'group-panel%))
-(define list-box%      (make-stub-class 'list-box%))
+; list-box% is the real implementation (list-box.rkt); imported above
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
 ; message% is the real implementation (message.rkt); imported above
 ; printer-dc% must NOT extend window% — it's a DC class.

@@ -49,6 +49,23 @@
          shim_action_is_checked
          shim_label_create
          shim_label_set_text
+         shim_check_box_create
+         shim_check_box_set_checked
+         shim_check_box_get_checked
+         shim_list_box_create
+         shim_list_box_clear
+         shim_list_box_append
+         shim_list_box_set_string
+         shim_list_box_delete
+         shim_list_box_count
+         shim_list_box_is_selected
+         shim_list_box_select
+         shim_list_box_set_current
+         shim_list_box_selected_count
+         shim_list_box_selected_at
+         shim_list_box_scroll_to
+         shim_list_box_first_visible
+         shim_list_box_visible_count
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -280,3 +297,75 @@
 (define shim_label_set_text
   (get-ffi-obj "shim_label_set_text" shim-lib
                (_fun _pointer _string/utf-8 -> _void)))
+
+; ---- check-box (check-box%) --------------------------------------------
+
+(define shim_check_box_create
+  (get-ffi-obj "shim_check_box_create" shim-lib
+               (_fun _pointer _string/utf-8 _callback_t _pointer -> _pointer)))
+
+(define shim_check_box_set_checked
+  (get-ffi-obj "shim_check_box_set_checked" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_check_box_get_checked
+  (get-ffi-obj "shim_check_box_get_checked" shim-lib
+               (_fun _pointer -> _int)))
+
+; ---- list-box (list-box%) -----------------------------------------------
+
+(define shim_list_box_create
+  (get-ffi-obj "shim_list_box_create" shim-lib
+               (_fun _pointer _int _callback_t _pointer -> _pointer)))
+
+(define shim_list_box_clear
+  (get-ffi-obj "shim_list_box_clear" shim-lib
+               (_fun _pointer -> _void)))
+
+(define shim_list_box_append
+  (get-ffi-obj "shim_list_box_append" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_list_box_set_string
+  (get-ffi-obj "shim_list_box_set_string" shim-lib
+               (_fun _pointer _int _string/utf-8 -> _void)))
+
+(define shim_list_box_delete
+  (get-ffi-obj "shim_list_box_delete" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_box_count
+  (get-ffi-obj "shim_list_box_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_box_is_selected
+  (get-ffi-obj "shim_list_box_is_selected" shim-lib
+               (_fun _pointer _int -> _int)))
+
+(define shim_list_box_select
+  (get-ffi-obj "shim_list_box_select" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_list_box_set_current
+  (get-ffi-obj "shim_list_box_set_current" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_box_selected_count
+  (get-ffi-obj "shim_list_box_selected_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_box_selected_at
+  (get-ffi-obj "shim_list_box_selected_at" shim-lib
+               (_fun _pointer _int -> _int)))
+
+(define shim_list_box_scroll_to
+  (get-ffi-obj "shim_list_box_scroll_to" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_box_first_visible
+  (get-ffi-obj "shim_list_box_first_visible" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_box_visible_count
+  (get-ffi-obj "shim_list_box_visible_count" shim-lib
+               (_fun _pointer -> _int)))
