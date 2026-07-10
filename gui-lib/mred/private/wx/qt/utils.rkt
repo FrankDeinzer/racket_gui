@@ -20,6 +20,7 @@
          shim_widget_set_focus
          shim_widget_client_to_screen
          shim_widget_get_size_hint
+         shim_widget_set_enabled
          shim_canvas_create
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
@@ -175,6 +176,13 @@
                      (out-h : (_ptr o _int))
                      -> _void
                      -> (values out-w out-h))))
+
+; QWidget::setEnabled() -- toolkit-level parent disable while a modal
+; dialog is open (docs/HACKING.md §18.3), mirroring win32's EnableWindow
+; and gtk's gtk_widget_set_sensitive.
+(define shim_widget_set_enabled
+  (get-ffi-obj "shim_widget_set_enabled" shim-lib
+               (_fun _pointer _int -> _void)))
 
 (define shim_canvas_create
   (get-ffi-obj "shim_canvas_create" shim-lib

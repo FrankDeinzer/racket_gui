@@ -114,6 +114,20 @@
     (define/override (get-top-frame) this)
     (define/override (get-dialog-level) 0)
 
+    ; ---- modal parent-disable (docs/HACKING.md §18.3) ----
+    ; Called by dialog%'s direct-show on every top-level window in the
+    ; eventspace, mirroring wx/win32/frame.rkt's modal-enable: disables this
+    ; frame's own QMainWindow (which Qt cascades to all its child controls)
+    ; while some other frame has an open modal dialog, re-enables once none
+    ; does. `ignoring` is the dialog being closed (so it doesn't count
+    ; itself as "other" during its own direct-show #f).
+    (define modal-enabled? #t)
+    (define/public (modal-enable ignoring)
+      (define on? (not (other-modal? this #f ignoring)))
+      (unless (eq? modal-enabled? on?)
+        (set! modal-enabled? on?)
+        (shim_widget_set_enabled qt-handle (if on? 1 0))))
+
     ; Called by mrtop.rkt on the first frame; cocoa uses it to set the app delegate,
     ; gtk/win32 are no-ops.  Qt needs no special treatment here.
     (define/public (designate-root-frame) (void))
