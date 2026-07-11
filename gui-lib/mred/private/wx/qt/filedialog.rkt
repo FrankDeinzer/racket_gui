@@ -62,10 +62,9 @@
 
 (define (file-selector message directory filename extension filters style parent)
   (cond
-    ; get-directory / get-file-list / put-file: not wired to the Qt path yet
-    ; this commit (docs/2026-07-11_prompt.md Phase 1 -- get-file only; the
-    ; identical mechanism gets a 'put style check enabled in the next commit).
-    [(or (memq 'dir style) (memq 'multi style) (memq 'put style)) #f]
+    ; get-directory / get-file-list: not wired to the Qt path this session
+    ; (docs/2026-07-11_prompt.md scope is get-file + put-file only).
+    [(or (memq 'dir style) (memq 'multi style)) #f]
     [else
      (define put? (and (memq 'put style) #t))
      (define parent-window
