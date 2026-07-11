@@ -17,6 +17,7 @@
          "menu.rkt"
          "menu-item.rkt"
          "message.rkt"
+         "filedialog.rkt"
          "queue.rkt")
 
 (provide (protect-out platform-values))
@@ -174,7 +175,7 @@
 (define (id-to-menu-item id)
   (and (object? id) (is-a? id menu-item%)
        (send id get-mred)))
-(define (file-selector msg dir fn ext filters style parent) #f)
+; file-selector: real implementation (filedialog.rkt); imported above
 (define (is-color-display?)              #t)
 (define (get-display-depth)              32)
 (define (has-x-selection?)               #f)

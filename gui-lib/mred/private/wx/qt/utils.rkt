@@ -68,10 +68,12 @@
          shim_list_box_scroll_to
          shim_list_box_first_visible
          shim_list_box_visible_count
+         shim_file_dialog_create
          _callback_t
          _mouse_cb_t
          _key_cb_t
-         _focus_cb_t)
+         _focus_cb_t
+         _file_dialog_cb_t)
 
 ; Locate the shim library.
 ; Path from this file: 7 levels up = project root, then qt-shim/build/<preset>/
@@ -109,6 +111,12 @@
 ; Focus callback: ud, gained(1=focus-in, 0=focus-out)
 (define _focus_cb_t
   (_fun #:atomic? #t _pointer _int -> _void))
+
+; File dialog result callback: ud, path (raw pointer -- NULL on cancel; the
+; Racket wrapper in filedialog.rkt casts it to _string/utf-8 itself, since
+; _string/utf-8's coretype (bytes) can't be wrapped in _or-null).
+(define _file_dialog_cb_t
+  (_fun #:atomic? #t _pointer _pointer -> _void))
 
 (define shim_version
   (get-ffi-obj "shim_version" shim-lib (_fun -> _string)))
@@ -389,3 +397,26 @@
 (define shim_list_box_visible_count
   (get-ffi-obj "shim_list_box_visible_count" shim-lib
                (_fun _pointer -> _int)))
+
+; ---- file dialog (get-file / put-file) -----------------------------------
+
+; parent (may be #f/NULL), mode (0=open,1=save), caption, directory,
+; filename, extension, filter (Qt name-filter syntax), result callback + ud.
+;
+; The `cb' parameter is declared _pointer, not _file_dialog_cb_t: a _fun
+; ctype's Racket->C conversion unconditionally re-wraps whatever value it's
+; given through make-ffi-callback (see ffi/unsafe.rkt's `_cprocedure*`), even
+; if that value is already a callback pointer -- so it both (a) rejects an
+; already-built callback with a "expected: procedure?" contract error, and
+; (b) if given a plain procedure instead, allocates a brand-new native
+; trampoline on every single call. filedialog.rkt builds exactly one
+; persistent callback via (function-ptr ... _file_dialog_cb_t) at module
+; load and passes that same pointer on every call; declaring this parameter
+; _pointer lets it pass through unchanged instead of being re-wrapped
+; (docs/HACKING.md §19 -- a fresh trampoline per call crashed reproducibly
+; after ~3 file dialogs).
+(define shim_file_dialog_create
+  (get-ffi-obj "shim_file_dialog_create" shim-lib
+               (_fun _pointer _int _string/utf-8 _string/utf-8 _string/utf-8
+                     _string/utf-8 _string/utf-8 _pointer _pointer
+                     -> _void)))
