@@ -45,6 +45,15 @@
     (define item-table (make-hasheq))
     ; items-in-order: list of (id . QAction*) — id is #f for separators
     (define items-in-order '())
+    ; retained-callbacks: id → cb closure, kept alive only so the GC never
+    ; collects it while the native QAction* can still invoke it. `cb` in
+    ; `append` is otherwise a plain local binding with no other Racket-side
+    ; reference once `append` returns -- the same landmine filedialog.rkt's
+    ; header comment documents (§19): a callback with nothing retaining it
+    ; can be collected and leave the QAction holding a dead function pointer.
+    ; Unlike button%/etc. (whose callback is a field of the widget itself),
+    ; a menu% hosts many items, so each item's cb is retained here by id.
+    (define retained-callbacks (make-hasheq))
 
     (define (order-push! id action)
       (set! items-in-order (list-append items-in-order (list (cons id action)))))
@@ -79,6 +88,7 @@
                             (queue-event (send frame get-eventspace)
                               (lambda ()
                                 (send frame on-menu-command id))))))])
+              (hash-set! retained-callbacks id cb)
               (shim_action_create qt-menu label (if checkable? 1 0) cb #f))))
       (hash-set! item-table id action)
       (order-push! id action))
@@ -94,6 +104,7 @@
       (when action
         (shim_menu_remove_action qt-menu action)
         (hash-remove! item-table id)
+        (hash-remove! retained-callbacks id)
         (set! items-in-order
               (filter (lambda (p) (not (eq? (car p) id)))
                       items-in-order))))
@@ -105,7 +116,7 @@
         (define id     (car pair))
         (define action (cdr pair))
         (shim_menu_remove_action qt-menu action)
-        (when id (hash-remove! item-table id))
+        (when id (hash-remove! item-table id) (hash-remove! retained-callbacks id))
         (order-remove-at! pos)))
 
     ; ---- enable (override — window% has 1-arg version) ----------------------
