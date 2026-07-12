@@ -169,12 +169,15 @@
 
 (define (can-show-print-setup?)          #f)
 (define (show-print-setup parent)        #f)
-; id is `this` from platform menu-item%'s (id) method. Since Racket's `this`
-; is always the most-derived object, id IS the wx-menu-item% glue instance,
-; which has get-mred.  We guard with is-a? to avoid errors on unexpected types.
-(define (id-to-menu-item id)
-  (and (object? id) (is-a? id menu-item%)
-       (send id get-mred)))
+; id is `this` from platform menu-item%'s (id) method, i.e. the wx-level
+; glue instance itself (mirrors gtk's `(define (id-to-menu-item i) i)`,
+; wx/gtk/procs.rkt). wxtop.rkt's on-menu-command applies the generic
+; `wx->mred` conversion itself after this call returns -- calling
+; `get-mred` here too was a double conversion and crashed (`generic:get-mred:
+; target is not an instance of the generic's interface`) because `this`,
+; while dynamically the most-derived object, is not guaranteed to satisfy
+; wx<%> at the point `(id)` runs. docs/HACKING.md §19.
+(define (id-to-menu-item id) id)
 ; file-selector: real implementation (filedialog.rkt); imported above
 (define (is-color-display?)              #t)
 (define (get-display-depth)              32)
