@@ -10,6 +10,7 @@
          "button.rkt"
          "check-box.rkt"
          "list-box.rkt"
+         "slider.rkt"
          "dialog.rkt"
          "panel.rkt"
          "window.rkt"
@@ -132,7 +133,7 @@
     (define/public (clear) (void))
     (define/public (erase) (void))))
 (define radio-box%     (make-stub-class 'radio-box%))
-(define slider%        (make-stub-class 'slider%))
+; slider% is the real implementation (slider.rkt); imported above
 (define tab-panel%     (make-stub-class 'tab-panel%))
 
 ; ---- minimal item% and clipboard/cursor stubs ------------------------------

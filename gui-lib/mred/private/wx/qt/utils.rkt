@@ -68,6 +68,9 @@
          shim_list_box_scroll_to
          shim_list_box_first_visible
          shim_list_box_visible_count
+         shim_slider_create
+         shim_slider_set_value
+         shim_slider_get_value
          shim_file_dialog_create
          _callback_t
          _mouse_cb_t
@@ -396,6 +399,20 @@
 
 (define shim_list_box_visible_count
   (get-ffi-obj "shim_list_box_visible_count" shim-lib
+               (_fun _pointer -> _int)))
+
+; ---- slider (slider%) ------------------------------------------------------
+
+(define shim_slider_create
+  (get-ffi-obj "shim_slider_create" shim-lib
+               (_fun _pointer _int _int _int _int _callback_t _pointer -> _pointer)))
+
+(define shim_slider_set_value
+  (get-ffi-obj "shim_slider_set_value" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_slider_get_value
+  (get-ffi-obj "shim_slider_get_value" shim-lib
                (_fun _pointer -> _int)))
 
 ; ---- file dialog (get-file / put-file) -----------------------------------
