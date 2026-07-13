@@ -78,6 +78,12 @@
          shim_choice_count
          shim_choice_set_selection
          shim_choice_get_selection
+         shim_radio_box_create
+         shim_radio_box_append_button
+         shim_radio_box_set_selection
+         shim_radio_box_get_selection
+         shim_radio_box_enable_button
+         shim_radio_box_button_focus
          shim_file_dialog_create
          _callback_t
          _mouse_cb_t
@@ -451,6 +457,32 @@
 (define shim_choice_get_selection
   (get-ffi-obj "shim_choice_get_selection" shim-lib
                (_fun _pointer -> _int)))
+
+; ---- radio-box (radio-box%) -------------------------------------------------
+
+(define shim_radio_box_create
+  (get-ffi-obj "shim_radio_box_create" shim-lib
+               (_fun _pointer _int _callback_t _pointer -> _pointer)))
+
+(define shim_radio_box_append_button
+  (get-ffi-obj "shim_radio_box_append_button" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_radio_box_set_selection
+  (get-ffi-obj "shim_radio_box_set_selection" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_radio_box_get_selection
+  (get-ffi-obj "shim_radio_box_get_selection" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_radio_box_enable_button
+  (get-ffi-obj "shim_radio_box_enable_button" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_radio_box_button_focus
+  (get-ffi-obj "shim_radio_box_button_focus" shim-lib
+               (_fun _pointer _int -> _int)))
 
 ; ---- file dialog (get-file / put-file) -----------------------------------
 

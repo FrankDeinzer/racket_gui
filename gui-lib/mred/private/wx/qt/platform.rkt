@@ -11,6 +11,7 @@
          "check-box.rkt"
          "list-box.rkt"
          "choice.rkt"
+         "radio-box.rkt"
          "slider.rkt"
          "dialog.rkt"
          "panel.rkt"
@@ -133,7 +134,7 @@
     (define/public (draw-line x1 y1 x2 y2) (void))
     (define/public (clear) (void))
     (define/public (erase) (void))))
-(define radio-box%     (make-stub-class 'radio-box%))
+; radio-box% is the real implementation (radio-box.rkt); imported above
 ; slider% is the real implementation (slider.rkt); imported above
 (define tab-panel%     (make-stub-class 'tab-panel%))
 
