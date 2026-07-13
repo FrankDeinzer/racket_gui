@@ -10,6 +10,7 @@
          "button.rkt"
          "check-box.rkt"
          "list-box.rkt"
+         "choice.rkt"
          "slider.rkt"
          "dialog.rkt"
          "panel.rkt"
@@ -87,7 +88,7 @@
 
 (define canvas-panel%  (make-stub-class 'canvas-panel%))
 ; check-box% is the real implementation (check-box.rkt); imported above
-(define choice%        (make-stub-class 'choice%))
+; choice% is the real implementation (choice.rkt); imported above
 ; dialog% is the real implementation (dialog.rkt); imported above
 ; gauge%: non-erroring stub (visual-only progress bar, e.g. DrRacket splash)
 (define gauge%

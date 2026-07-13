@@ -71,6 +71,13 @@
          shim_slider_create
          shim_slider_set_value
          shim_slider_get_value
+         shim_choice_create
+         shim_choice_append
+         shim_choice_clear
+         shim_choice_delete
+         shim_choice_count
+         shim_choice_set_selection
+         shim_choice_get_selection
          shim_file_dialog_create
          _callback_t
          _mouse_cb_t
@@ -413,6 +420,36 @@
 
 (define shim_slider_get_value
   (get-ffi-obj "shim_slider_get_value" shim-lib
+               (_fun _pointer -> _int)))
+
+; ---- choice (choice%) -------------------------------------------------------
+
+(define shim_choice_create
+  (get-ffi-obj "shim_choice_create" shim-lib
+               (_fun _pointer _callback_t _pointer -> _pointer)))
+
+(define shim_choice_append
+  (get-ffi-obj "shim_choice_append" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_choice_clear
+  (get-ffi-obj "shim_choice_clear" shim-lib
+               (_fun _pointer -> _void)))
+
+(define shim_choice_delete
+  (get-ffi-obj "shim_choice_delete" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_choice_count
+  (get-ffi-obj "shim_choice_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_choice_set_selection
+  (get-ffi-obj "shim_choice_set_selection" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_choice_get_selection
+  (get-ffi-obj "shim_choice_get_selection" shim-lib
                (_fun _pointer -> _int)))
 
 ; ---- file dialog (get-file / put-file) -----------------------------------
