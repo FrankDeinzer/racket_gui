@@ -180,6 +180,11 @@
 
   (define (current-eventspace-has-standard-menus?)
     (and (eq? 'macosx (system-type))
+	 ; Qt backend (PLT_QT=1) has no equivalent of wx/cocoa's native
+	 ; Preferences/App-menu hook (docs/HACKING.md §22) -- let the
+	 ; framework create its own standard menu items instead of assuming
+	 ; Cocoa already provides them.
+	 (not (getenv "PLT_QT"))
 	 (wx:main-eventspace? (wx:current-eventspace))))
 
   (define (current-eventspace-has-menu-root?)
