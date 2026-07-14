@@ -86,6 +86,15 @@
          shim_radio_box_enable_button
          shim_radio_box_button_focus
          shim_file_dialog_create
+         shim_tab_panel_create
+         shim_tab_panel_get_tabbar_widget
+         shim_tab_panel_get_content_widget
+         shim_tab_panel_append
+         shim_tab_panel_delete
+         shim_tab_panel_set_label
+         shim_tab_panel_set_selection
+         shim_tab_panel_get_selection
+         shim_tab_panel_count
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -511,3 +520,42 @@
                (_fun _pointer _int _string/utf-8 _string/utf-8 _string/utf-8
                      _string/utf-8 _string/utf-8 _pointer _pointer
                      -> _void)))
+
+; ---- tab-panel (tab-panel%) --------------------------------------------
+
+(define shim_tab_panel_create
+  (get-ffi-obj "shim_tab_panel_create" shim-lib
+               (_fun _pointer _callback_t _pointer -> _pointer)))
+
+(define shim_tab_panel_get_tabbar_widget
+  (get-ffi-obj "shim_tab_panel_get_tabbar_widget" shim-lib
+               (_fun _pointer -> _pointer)))
+
+(define shim_tab_panel_get_content_widget
+  (get-ffi-obj "shim_tab_panel_get_content_widget" shim-lib
+               (_fun _pointer -> _pointer)))
+
+(define shim_tab_panel_append
+  (get-ffi-obj "shim_tab_panel_append" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_tab_panel_delete
+  (get-ffi-obj "shim_tab_panel_delete" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_tab_panel_set_label
+  (get-ffi-obj "shim_tab_panel_set_label" shim-lib
+               (_fun _pointer _int _string/utf-8 -> _void)))
+
+(define shim_tab_panel_set_selection
+  (get-ffi-obj "shim_tab_panel_set_selection" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_tab_panel_get_selection
+  (get-ffi-obj "shim_tab_panel_get_selection" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_tab_panel_count
+  (get-ffi-obj "shim_tab_panel_count" shim-lib
+               (_fun _pointer -> _int)))
+

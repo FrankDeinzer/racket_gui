@@ -13,6 +13,7 @@
          "choice.rkt"
          "radio-box.rkt"
          "slider.rkt"
+         "tab-panel.rkt"
          "dialog.rkt"
          "panel.rkt"
          "window.rkt"
@@ -38,9 +39,8 @@
     (define/public (set-border on?)  (void))
     (define/public (set-value v)     (void))
     (define/public (get-value)       #f)
-    ; variadic: button-style callers pass (label); tab-panel%'s get-tab-widget
-    ; path (mrpanel.rkt) passes (index label) since tab-panel-available? => #t
-    ; claims a native tab widget -- mirrors `append`'s rest-arg treatment above.
+    ; variadic: button-style callers pass (label); other stub consumers may
+    ; pass (index label) -- mirrors `append`'s rest-arg treatment above.
     (define/public (set-label . args) (void))
     (define/public (get-label)        "")
     (define/public (set-selection i) (void))
@@ -136,7 +136,7 @@
     (define/public (erase) (void))))
 ; radio-box% is the real implementation (radio-box.rkt); imported above
 ; slider% is the real implementation (slider.rkt); imported above
-(define tab-panel%     (make-stub-class 'tab-panel%))
+; tab-panel% is the real implementation (tab-panel.rkt); imported above
 
 ; ---- minimal item% and clipboard/cursor stubs ------------------------------
 
