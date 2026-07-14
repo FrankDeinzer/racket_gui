@@ -76,7 +76,15 @@
     (define/public (is-enabled-to-root?) enabled?)
     (define/public (is-window-enabled?) enabled?)
     (define/public (enable b)            (set! enabled? (and b #t)))
-    (define/public (show on?)            (set! shown? (and on? #t)))
+    ; Reflects onto the real QWidget, not just this Racket-side flag --
+    ; single-mixin's active-child (framework/private/panel.rkt, the
+    ; mechanism behind the real Preferences dialog's panel:single% and any
+    ; other show-based "only one child visible" pattern) positions every
+    ; child unconditionally and relies entirely on native show/hide to make
+    ; the inactive ones disappear (docs/HACKING.md §21).
+    (define/public (show on?)
+      (set! shown? (and on? #t))
+      (when handle (shim_widget_set_visible handle (if on? 1 0))))
     (define/public (is-shown?)           shown?)
     (define/public (parent-enable on?)   (void))
 

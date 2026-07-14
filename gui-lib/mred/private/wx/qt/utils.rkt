@@ -21,6 +21,7 @@
          shim_widget_client_to_screen
          shim_widget_get_size_hint
          shim_widget_set_enabled
+         shim_widget_set_visible
          shim_canvas_create
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
@@ -206,6 +207,10 @@
 ; and gtk's gtk_widget_set_sensitive.
 (define shim_widget_set_enabled
   (get-ffi-obj "shim_widget_set_enabled" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_widget_set_visible
+  (get-ffi-obj "shim_widget_set_visible" shim-lib
                (_fun _pointer _int -> _void)))
 
 (define shim_canvas_create
