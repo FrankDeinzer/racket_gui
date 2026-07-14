@@ -87,7 +87,7 @@
 
 ; ---- unimplemented stubs ---------------------------------------------------
 
-(define canvas-panel%  (make-stub-class 'canvas-panel%))
+; canvas-panel% is the real implementation (canvas.rkt); imported above
 ; check-box% is the real implementation (check-box.rkt); imported above
 ; choice% is the real implementation (choice.rkt); imported above
 ; dialog% is the real implementation (dialog.rkt); imported above

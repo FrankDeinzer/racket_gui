@@ -21,10 +21,12 @@
          "../common/queue.rkt"
          "../common/event.rkt"
          "window.rkt"
+         "panel.rkt"
          "utils.rkt"
          "key-map.rkt")
 
-(provide canvas%)
+(provide canvas%
+         canvas-panel%)
 
 ; ---- Qt-specific backing dc -------------------------------------------
 
@@ -329,3 +331,27 @@
   (canvas-mixin
    (canvas-autoscroll-mixin
     base-canvas%)))
+
+; ---- canvas-panel% = canvas% + panel-mixin -----------------------------
+; A scrollable canvas that also hosts children (e.g. framework/private/
+; color-prefs.rkt's hide-hscroll/hide-vscroll preference panels) -- mirrors
+; win32's canvas-panel% (wx/win32/canvas.rkt), which is likewise just
+; canvas% + panel-mixin. set-scrollbars/do-set-scrollbars/
+; reset-dc-for-autoscroll/get-virtual-h-pos/get-virtual-v-pos all already
+; come from canvas%'s own canvas-autoscroll-mixin composition above -- the
+; only thing missing for a plain canvas% to also work as a panel is
+; panel-mixin's adopt-child/register-child/etc (docs/HACKING.md §22).
+;
+; win32's canvas-panel% additionally overrides notify-child-extent (called
+; from win32 window%'s own resize path, which this backend's window.rkt
+; doesn't have) and reset-dc-for-autoscroll (repositions a separate
+; content-hwnd by the scroll offset). This backend has no separate content
+; sub-widget -- get-content-hwnd is the same qt-handle used for painting --
+; so the inherited no-op reset-dc-for-autoscroll is used as-is: real
+; virtual-scroll child repositioning is not implemented (no driver's
+; content overflows enough to need it; same scoping call as list-box%'s
+; single-column decision).
+(define canvas-panel%
+  (class (panel-mixin canvas%)
+    (define/public (is-panel?) #t)
+    (super-new)))
