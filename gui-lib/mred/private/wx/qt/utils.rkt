@@ -95,6 +95,10 @@
          shim_tab_panel_set_selection
          shim_tab_panel_get_selection
          shim_tab_panel_count
+         shim_group_panel_create
+         shim_group_panel_get_content_widget
+         shim_group_panel_get_content_margins
+         shim_group_panel_set_label
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -559,3 +563,26 @@
   (get-ffi-obj "shim_tab_panel_count" shim-lib
                (_fun _pointer -> _int)))
 
+; ---- group-panel (group-panel%) ----------------------------------------
+
+(define shim_group_panel_create
+  (get-ffi-obj "shim_group_panel_create" shim-lib
+               (_fun _pointer _string/utf-8 -> _pointer)))
+
+(define shim_group_panel_get_content_widget
+  (get-ffi-obj "shim_group_panel_get_content_widget" shim-lib
+               (_fun _pointer -> _pointer)))
+
+(define shim_group_panel_get_content_margins
+  (get-ffi-obj "shim_group_panel_get_content_margins" shim-lib
+               (_fun _pointer
+                     (out-l : (_ptr o _int))
+                     (out-t : (_ptr o _int))
+                     (out-r : (_ptr o _int))
+                     (out-b : (_ptr o _int))
+                     -> _void
+                     -> (values out-l out-t out-r out-b))))
+
+(define shim_group_panel_set_label
+  (get-ffi-obj "shim_group_panel_set_label" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))

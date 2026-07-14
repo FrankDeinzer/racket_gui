@@ -14,6 +14,7 @@
          "radio-box.rkt"
          "slider.rkt"
          "tab-panel.rkt"
+         "group-panel.rkt"
          "dialog.rkt"
          "panel.rkt"
          "window.rkt"
@@ -103,7 +104,7 @@
     (define/public (set-range r) (set! range r))
     (define/public (get-value)   value)
     (define/public (set-value v) (set! value v))))
-(define group-panel%   (make-stub-class 'group-panel%))
+; group-panel% is the real implementation (group-panel.rkt); imported above
 ; list-box% is the real implementation (list-box.rkt); imported above
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
 ; message% is the real implementation (message.rkt); imported above
