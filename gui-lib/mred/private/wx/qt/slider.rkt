@@ -48,7 +48,7 @@
                        (callback this
                                  (make-object control-event% 'slider))))))
 
-    (define panel-handle (and (not plain?) (shim_panel_create parent-handle)))
+    (define panel-handle (and (not plain?) (shim_panel_create parent-handle 0)))
 
     (define slider-handle
       (shim_slider_create (or panel-handle parent-handle)

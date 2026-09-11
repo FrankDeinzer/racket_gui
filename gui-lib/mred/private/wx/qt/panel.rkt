@@ -1,7 +1,9 @@
 #lang racket/base
-; Qt panel% — a real QWidget container.
+; Qt panel% — a real QWidget (QFrame) container.
 ; Children (canvas, button, nested panels) parent themselves to this widget.
 ; Racket drives all geometry via shim_widget_set_geometry.
+; 'border in style draws a frame rectangle (mirrors win32's WS_BORDER /
+; gtk's 'border check) -- docs/HACKING.md §21.6.
 (require racket/class
          "../common/queue.rkt"
          "window.rkt"
@@ -31,7 +33,8 @@
 
     (define qt-handle
       (if (and parent (object? parent) (is-a? parent window%))
-          (shim_panel_create (send parent get-content-hwnd))
+          (shim_panel_create (send parent get-content-hwnd)
+                             (if (memq 'border style) 1 0))
           #f))
 
     (super-new [handle     qt-handle]

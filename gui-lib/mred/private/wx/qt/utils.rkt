@@ -264,7 +264,7 @@
 
 (define shim_panel_create
   (get-ffi-obj "shim_panel_create" shim-lib
-               (_fun _pointer -> _pointer)))
+               (_fun _pointer _int -> _pointer)))
 
 (define shim_button_create
   (get-ffi-obj "shim_button_create" shim-lib
