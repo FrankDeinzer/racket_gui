@@ -72,6 +72,10 @@
          shim_slider_create
          shim_slider_set_value
          shim_slider_get_value
+         shim_scrollbar_create
+         shim_scrollbar_set_range
+         shim_scrollbar_set_value
+         shim_scrollbar_get_value
          shim_choice_create
          shim_choice_append
          shim_choice_clear
@@ -444,6 +448,24 @@
 
 (define shim_slider_get_value
   (get-ffi-obj "shim_slider_get_value" shim-lib
+               (_fun _pointer -> _int)))
+
+; ---- scrollbar (canvas% do-set-scrollbars / manual scroll API) -------------
+
+(define shim_scrollbar_create
+  (get-ffi-obj "shim_scrollbar_create" shim-lib
+               (_fun _pointer _int _callback_t _pointer -> _pointer)))
+
+(define shim_scrollbar_set_range
+  (get-ffi-obj "shim_scrollbar_set_range" shim-lib
+               (_fun _pointer _int _int _int -> _void)))
+
+(define shim_scrollbar_set_value
+  (get-ffi-obj "shim_scrollbar_set_value" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_scrollbar_get_value
+  (get-ffi-obj "shim_scrollbar_get_value" shim-lib
                (_fun _pointer -> _int)))
 
 ; ---- choice (choice%) -------------------------------------------------------
