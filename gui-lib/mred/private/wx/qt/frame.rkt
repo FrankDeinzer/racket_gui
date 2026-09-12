@@ -76,6 +76,36 @@
       (when (and nw (> nw 0) nh (> nh 0))
         (shim_window_set_size qt-handle nw nh)))
 
+    ; ---- window state (maximize/iconize/fullscreen, docs/HACKING.md §27) ----
+    ; window%'s base stubs (iconized?/maximize/is-maximized?/fullscreen/
+    ; fullscreened? -- all hardcoded #f/no-op) were never overridden here
+    ; before; frame% now delegates to the shim, which toggles individual
+    ; Qt::WindowStates bits via setWindowState() (see shim.cpp) rather than
+    ; calling showMaximized()/showMinimized()/showFullScreen()/showNormal()
+    ; -- those convenience methods also force setVisible(true), which would
+    ; wrongly show a not-yet-shown frame the moment `maximize` is called
+    ; (exactly mrtop.rkt's position-for-initial-show + maximize-before-show
+    ; flow), and showNormal() would clear all three state bits together
+    ; instead of restoring just the one being toggled. Mirrors win32's
+    ; observable behavior (win32/frame.rkt:584-673) without duplicating its
+    ; independent GWL_STYLE-based bookkeeping.
+    ; `iconize` (the setter -- there is no base window.rkt stub for it,
+    ; matching win32/frame.rkt:599 having its own define/public with no
+    ; base-class counterpart either) is called directly by mred/private/
+    ; mrtop.rkt's frame% glue.
+    (define/override (maximize on?)
+      (shim_window_maximize qt-handle (if on? 1 0)))
+    (define/override (is-maximized?)
+      (= 1 (shim_window_is_maximized qt-handle)))
+    (define/public (iconize on?)
+      (shim_window_iconize qt-handle (if on? 1 0)))
+    (define/override (iconized?)
+      (= 1 (shim_window_is_iconized qt-handle)))
+    (define/override (fullscreen on?)
+      (shim_window_fullscreen qt-handle (if on? 1 0)))
+    (define/override (fullscreened?)
+      (= 1 (shim_window_is_fullscreen qt-handle)))
+
     (define/public (set-label lbl)
       (shim_window_set_title qt-handle lbl))
 

@@ -16,6 +16,12 @@
          shim_window_destroy
          shim_window_get_content_widget
          shim_window_set_menubar
+         shim_window_maximize
+         shim_window_is_maximized
+         shim_window_iconize
+         shim_window_is_iconized
+         shim_window_fullscreen
+         shim_window_is_fullscreen
          shim_widget_set_geometry
          shim_widget_set_focus
          shim_widget_client_to_screen
@@ -190,6 +196,30 @@
 (define shim_window_get_content_widget
   (get-ffi-obj "shim_window_get_content_widget" shim-lib
                (_fun _pointer -> _pointer)))
+
+(define shim_window_maximize
+  (get-ffi-obj "shim_window_maximize" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_window_is_maximized
+  (get-ffi-obj "shim_window_is_maximized" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_window_iconize
+  (get-ffi-obj "shim_window_iconize" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_window_is_iconized
+  (get-ffi-obj "shim_window_is_iconized" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_window_fullscreen
+  (get-ffi-obj "shim_window_fullscreen" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_window_is_fullscreen
+  (get-ffi-obj "shim_window_is_fullscreen" shim-lib
+               (_fun _pointer -> _int)))
 
 (define shim_widget_set_geometry
   (get-ffi-obj "shim_widget_set_geometry" shim-lib
