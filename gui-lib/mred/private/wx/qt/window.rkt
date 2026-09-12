@@ -72,8 +72,15 @@
     (define/public (center dir [parent #f]) (void))
 
     ; ---- visibility / enable ----
-    (define/public (is-shown-to-root?)   shown?)
-    (define/public (is-enabled-to-root?) enabled?)
+    ; Recursive parent-chain walk, mirroring wx/win32/window.rkt:323-325 and
+    ; wx/cocoa/window.rkt:705-717 (docs/HACKING.md §26). frame% overrides both
+    ; to terminate the chain (its `parent` is an owner frame or #f, not a
+    ; containment parent) -- every other window%-derived class always has a
+    ; real container as `parent`.
+    (define/public (is-shown-to-root?)
+      (and shown? (send parent is-shown-to-root?)))
+    (define/public (is-enabled-to-root?)
+      (and enabled? (send parent is-enabled-to-root?)))
     (define/public (is-window-enabled?) enabled?)
     (define/public (enable b)            (set! enabled? (and b #t)))
     ; Reflects onto the real QWidget, not just this Racket-side flag --

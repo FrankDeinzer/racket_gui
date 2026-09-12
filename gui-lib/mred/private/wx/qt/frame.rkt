@@ -52,7 +52,23 @@
     (define/override (show on?)
       (direct-show on?))
 
-    (define/override (is-shown?) (send this is-shown-to-root?))
+    ; Terminates the recursive is-shown-to-root?/is-enabled-to-root? walk
+    ; (window.rkt, docs/HACKING.md §26) -- a frame's `parent` is an owner
+    ; frame or #f, not a containment parent, so the chain must not recurse
+    ; into it. is-shown-to-root? bottoms out at this frame's own (plain,
+    ; non-recursive) is-shown?, mirroring wx/win32/frame.rkt:406-407.
+    ; is-enabled-to-root? does NOT mirror win32's unconditional #t
+    ; (win32/frame.rkt:408-409) -- win32 can hardcode #t there because its
+    ; own `enable` calls EnableWindow, so the OS itself stops input to a
+    ; disabled frame; win32's Racket-side gate is genuinely redundant. Qt's
+    ; `enable` (window.rkt) only flips the Racket-side `enabled?` field --
+    ; nothing calls shim_widget_set_enabled from there (only modal-enable
+    ; does, directly, bypassing this method entirely) -- so hardcoding #t
+    ; here would silently disable dispatch-on-char/dispatch-on-event's gate
+    ; (window.rkt:211,220) for a disabled frame. Falls back to this frame's
+    ; own enabled? flag instead, via the plain accessor (window.rkt:77).
+    (define/override (is-shown-to-root?)   (send this is-shown?))
+    (define/override (is-enabled-to-root?) (send this is-window-enabled?))
     (define/override (is-frame?) #t)
 
     (define/override (set-size nx ny nw nh)
