@@ -81,7 +81,6 @@
 
     (define/public (set-border on?)   (void))
     (define/public (direct-show on?)  (void))
-    (define/override (is-shown?)        #t)
     (define/override (gets-focus?)      #t)
     (define/override (get-qt-handle)    qt-handle)
     (define/public   (command e)        (callback this e))

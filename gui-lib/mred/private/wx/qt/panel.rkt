@@ -54,5 +54,4 @@
     (define/override (get-qt-handle)    qt-handle)
     ; Children of this panel parent to this widget.
     (define/override (get-content-hwnd) qt-handle)
-    (define/public   (direct-show on?)  (void))
-    (define/override (is-shown?)        #t)))
+    (define/public   (direct-show on?)  (void))))

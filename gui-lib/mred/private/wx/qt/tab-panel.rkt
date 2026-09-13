@@ -156,5 +156,4 @@
     (define/override (get-qt-handle)    qt-handle)
     (define/override (get-content-hwnd) content-handle)
     (define/public   (direct-show on?)  (void))
-    (define/override (is-shown?)        #t)
     (define/override (gets-focus?)      #t)))

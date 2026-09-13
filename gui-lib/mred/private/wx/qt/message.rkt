@@ -44,5 +44,4 @@
     (define/public  (command e)          (void))
     (define/public  (set-color c)        (void))
     (define/public  (get-color)          #f)
-    (define/public  (set-preferred-size) #f)
-    (define/override (is-shown?)         #t)))
+    (define/public  (set-preferred-size) #f)))
