@@ -82,7 +82,19 @@
     (define/public (is-enabled-to-root?)
       (and enabled? (send parent is-enabled-to-root?)))
     (define/public (is-window-enabled?) enabled?)
-    (define/public (enable b)            (set! enabled? (and b #t)))
+    ; Reflects onto the real QWidget (not just the Racket-side flag) so Qt's
+    ; own native enabled-state cascade reaches children -- mirrors `show`
+    ; below. Previously a pure Racket-side flag (docs/HACKING.md §26 Fund 2):
+    ; native click signals (e.g. button%'s click-fn, wx/qt/button.rkt) are
+    ; wired directly to the Qt widget and never consulted `enabled?`, so a
+    ; Racket-"disabled" button remained fully clickable at the native level.
+    ; frame%'s modal-enable (frame.rkt) already called shim_widget_set_enabled
+    ; directly on its own handle for the modal-dialog-disables-owner-frame
+    ; case; this extends the same native call to the general `enable` API for
+    ; every window%-derived widget, not just frames.
+    (define/public (enable b)
+      (set! enabled? (and b #t))
+      (when handle (shim_widget_set_enabled handle (if b 1 0))))
     ; Reflects onto the real QWidget, not just this Racket-side flag --
     ; single-mixin's active-child (framework/private/panel.rkt, the
     ; mechanism behind the real Preferences dialog's panel:single% and any
