@@ -37,7 +37,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace (current-eventspace)])
+               [eventspace (current-eventspace)]
+               [no-show?   (and (memq 'deleted style) #t)])
 
     ; ---- sizing ----
     ; No QLayout: the content widget is positioned inside QGroupBox's own

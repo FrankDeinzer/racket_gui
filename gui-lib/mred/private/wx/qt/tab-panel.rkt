@@ -64,7 +64,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
 
     ; ---- sizing ----
     ; No QLayout: tabbar gets its own sizeHint height at the top, content

@@ -75,7 +75,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
     (if panel-handle
         (if vertical?
             (send this set-size #f #f (+ THICKNESS value-w) (max value-h MIN_LENGTH))

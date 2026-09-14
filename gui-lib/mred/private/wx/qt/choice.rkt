@@ -40,7 +40,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
     ; After choices, not before: sizeHint() should reflect populated items.
     (send this seed-size-from-native-hint)
 

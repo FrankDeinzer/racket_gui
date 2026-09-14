@@ -59,7 +59,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
 
     ; Racket-side box list for set-data/get-data — Qt has no slot for
     ; arbitrary Racket values on a QListWidgetItem.

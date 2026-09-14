@@ -21,7 +21,8 @@
 
     (super-new [handle qt-handle]
                [parent parent]
-               [eventspace (current-eventspace)])
+               [eventspace (current-eventspace)]
+               [no-show?   (and (memq 'deleted style) #t)])
     (send this seed-size-from-native-hint)
 
     (define/override (set-size nx ny nw nh)

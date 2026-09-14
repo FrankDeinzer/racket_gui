@@ -40,7 +40,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
     (send this seed-size-from-native-hint)
 
     ; ---- sizing ----

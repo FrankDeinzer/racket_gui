@@ -215,7 +215,8 @@
 
     (super-new [handle     qt-handle]
                [parent     parent]
-               [eventspace the-eventspace])
+               [eventspace the-eventspace]
+               [no-show?   (and (memq 'deleted style) #t)])
 
     ; Must exist before the set-size seed call below: that override now also
     ; touches `dc' (reset-backing-retained), and set-size can run during

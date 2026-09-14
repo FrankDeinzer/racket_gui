@@ -35,6 +35,9 @@
     (init-field [handle     #f]
                 [parent     #f]
                 [eventspace (current-eventspace)])
+    ; #t when the creating style list contained 'deleted -- see the
+    ; hide-on-create expression at the bottom of this class.
+    (init [no-show? #f])
 
     (define w 0)
     (define h 0)
@@ -262,4 +265,25 @@
               (pre-on-char w e))
           (pre-on-char w e)))
 
-    (super-new)))
+    (super-new)
+
+    ; ---- 'deleted: hide on create (docs/HACKING.md §35) ----
+    ; A widget created with 'deleted in its style must not be painted until
+    ; the glue explicitly shows it. win32 expresses this as "show at the end
+    ; of construction UNLESS 'deleted" (wx/win32/window.rkt:291); gtk passes a
+    ; `no-show?` init down the same way (wx/gtk/window.rkt:582/714). Qt needs
+    ; the inverted phrasing: a QWidget created while its ancestors are still
+    ; hidden (which is the normal case -- panels and controls are built before
+    ; `(send frame show #t)`) carries no explicit-hide flag, so QWidget::show()
+    ; on the frame cascades down and makes EVERY such descendant visible,
+    ; 'deleted or not. Hence an explicit hide here.
+    ;
+    ; Note that the glue creates nearly everything with 'deleted and unhides
+    ; it right afterwards: wxitem.rkt:234/246/251 (button/check-box/message)
+    ; and wxpanel.rkt:597 (every basic panel) all pass (cons 'deleted style)
+    ; to the platform class and then call show-control, which lands on `show`
+    ; above. Only a widget whose *user* style really says 'deleted -- e.g.
+    ; DrRacket's test-engine dock panel, htdp-lib/test-engine/test-tool.rkt:100
+    ; -- never gets that call and stays hidden, which is the point.
+    (when (and handle no-show?)
+      (shim_widget_set_visible handle 0))))
