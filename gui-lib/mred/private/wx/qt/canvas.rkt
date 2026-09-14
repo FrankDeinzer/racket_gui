@@ -201,8 +201,12 @@
                  [meta-down    (qt-mods->meta?    mods)]
                  [alt-down     (qt-mods->alt?     mods)]))
           (send e set-wheel-steps steps)
+          ; A scrollable canvas-panel% gets first refusal: nothing downstream
+          ; of dispatch-on-char would scroll it (see qt-wheel-scroll below).
           (queue-event the-eventspace
-                       (lambda () (send this dispatch-on-char e #f))))))
+                       (lambda ()
+                         (unless (send this qt-wheel-scroll code steps)
+                           (send this dispatch-on-char e #f)))))))
 
     (shim_canvas_set_mouse_cb qt-handle mouse-cb #f)
     (shim_canvas_set_key_cb   qt-handle key-cb   #f)
@@ -359,6 +363,9 @@
     (define/public (get-scroll-range which)         0)
     (define/public (set-scroll-range which v)       (void))
     (define/public (show-scrollbars h? v?)          (void))
+    ; Asked before the wheel is delivered as a key-event%; #t means "consumed".
+    ; Only qt-canvas-scroll-mixin's scrollable-panel case ever answers #t.
+    (define/public (qt-wheel-scroll code steps)     #f)
     (define/override (set-focus)
       (shim_widget_set_focus qt-handle))
     (define/public (set-wheel-steps-mode mode)      (void))
@@ -411,24 +418,64 @@
     ; (same pattern as gtk/canvas.rkt's `dc' field).
     (define scroll-ready? #f)
 
+    ; Separate content widget for a scrollable canvas-panel% (see below).
+    ; Declared before super-new so get-content-hwnd can be answered at any
+    ; point during construction; filled in once the style is known.
+    (define content-handle #f)
+
     (super-new)
+
+    ; Scroll tracing, off unless PLT_QT_SCROLL_DEBUG is set.  Separate from
+    ; PLT_QT_DEBUG on purpose: that one also turns on the per-paint logging,
+    ; which drowns the scroll sequence.  The id tags one canvas instance --
+    ; a DrRacket frame has dozens, so untagged lines are unreadable.
+    ; Defined here rather than next to the other internals below: `dbg' is a
+    ; plain letrec-bound name (not a method), so a trace call in the class
+    ; body can only see it after this point.
+    (define dbg-id (gensym 'c))
+    (define (dbg fmt . args)
+      (when (getenv "PLT_QT_SCROLL_DEBUG")
+        (apply eprintf (string-append "[sb ~a] " fmt) dbg-id args)))
 
     (define scroll-style (get-canvas-style))
 
-    ; canvas-panel% is deliberately excluded: its content is real child
-    ; widgets, which a paint-offset cannot move.  Scrolling those needs a
-    ; separate content widget to reposition (win32 moves its content-hwnd in
-    ; reset-dc-for-autoscroll) -- that is the '(auto-vscroll) panel case
-    ; (docs/HACKING.md §25.2) and is not implemented here.  Creating
-    ; scrollbars for it would show a scrollbar that moves nothing.
+    ; Same test as win32 (canvas.rkt:98-101, which turns it into WS_?SCROLL);
+    ; canvas-panel% included, see the content widget below.
     (define want-h?
-      (and (not (is-panel?))
-           (or (memq 'hscroll scroll-style) (memq 'auto-hscroll scroll-style))
+      (and (or (memq 'hscroll scroll-style) (memq 'auto-hscroll scroll-style))
            #t))
     (define want-v?
-      (and (not (is-panel?))
-           (or (memq 'vscroll scroll-style) (memq 'auto-vscroll scroll-style))
+      (and (or (memq 'vscroll scroll-style) (memq 'auto-vscroll scroll-style))
            #t))
+
+    (dbg "style=~a panel=~a want=~a/~a\n" scroll-style (is-panel?) want-h? want-v?)
+
+    ; ---- content widget (scrollable canvas-panel% only) -----------------
+    ; A panel's content is real child widgets, and a dc offset does not move
+    ; those.  win32 solves it with a separate content-hwnd inside the canvas
+    ; window that children parent into (canvas.rkt:149-159) and that
+    ; canvas-panel%'s reset-dc-for-autoscroll moves by the scroll offset
+    ; (canvas.rkt:663-673).  This is the Qt equivalent: a plain container
+    ; widget handed out by get-content-hwnd and repositioned in
+    ; position-content!.
+    ;
+    ; Two deliberate differences from win32:
+    ;  * Created only for a panel that actually gets a scrollbar, not for
+    ;    every is-panel?.  Every child of such a panel parents into this
+    ;    handle instead of the canvas widget, so the change is kept to
+    ;    'vscroll/'auto-vscroll (and the h variants) panels; the
+    ;    'hide-hscroll/'hide-vscroll ones (framework/private/color-prefs.rkt's
+    ;    canvas:color%) keep exactly the structure they have today.
+    ;  * Created *before* the scrollbars.  Among Qt siblings the one created
+    ;    last is on top, and this widget is as large as the virtual content,
+    ;    so it would cover the bars if it came second.  The shim has no raise
+    ;    primitive and adding one would mean a further ABI export.
+    (when (and (is-panel?) (or want-h? want-v?))
+      (set! content-handle (shim_panel_create (get-qt-handle) 0))
+      ; Qt does not show a child that is added to an already-visible parent,
+      ; and this widget is not a window%, so nothing else will ever call show
+      ; on it.  Without this the whole panel stays blank.
+      (shim_widget_set_visible content-handle 1))
 
     ; Bound to fields before being handed to the shim: an inline lambda would
     ; have no Racket-side owner, so the closure could be collected while Qt
@@ -470,20 +517,12 @@
       (push-range! 'horizontal)
       (push-range! 'vertical)
       (apply-visibility!)
-      (position-scrollbars!))
+      (position-scrollbars!)
+      (position-content!))
 
     ; ---- internals ------------------------------------------------------
 
     (define/private (sb-of which) (if (eq? which 'vertical) v-sb h-sb))
-
-    ; Scroll tracing, off unless PLT_QT_SCROLL_DEBUG is set.  Separate from
-    ; PLT_QT_DEBUG on purpose: that one also turns on the per-paint logging,
-    ; which drowns the scroll sequence.  The id tags one canvas instance --
-    ; a DrRacket frame has dozens, so untagged lines are unreadable.
-    (define dbg-id (gensym 'c))
-    (define (dbg fmt . args)
-      (when (getenv "PLT_QT_SCROLL_DEBUG")
-        (apply eprintf (string-append "[sb ~a] " fmt) dbg-id args)))
 
     (define/private (push-range! which)
       (define sb (sb-of which))
@@ -513,6 +552,39 @@
       (when h-sb
         (shim_widget_set_geometry h-sb 0 (max 0 (- h ht))
                                   (max 1 (- w vt)) ht)))
+
+    ; Children that a panel places live in the content widget, so the panel's
+    ; scroll offset is applied by moving that one widget.  Its size is the
+    ; virtual content size but never smaller than the client area -- children
+    ; outside the parent's rectangle are clipped away by Qt.
+    ;
+    ; The base is the *client* size (bars already subtracted), not the raw
+    ; widget size that position-scrollbars! works against: wxpanel.rkt's
+    ; panel-redraw places its children against exactly this number, so the
+    ; content widget has to agree with it.
+    (define/private (position-content!)
+      (when content-handle
+        (define wb (box 0))
+        (define hb (box 0))
+        (get-client-size wb hb)
+        (define vw (or (get-virtual-width)  0))
+        (define vh (or (get-virtual-height) 0))
+        (define cw (max 1 (unbox wb) vw))
+        (define ch (max 1 (unbox hb) vh))
+        (define cx (- (content-offset 'horizontal)))
+        (define cy (- (content-offset 'vertical)))
+        (dbg "position-content! ~a,~a ~ax~a (client ~ax~a virtual ~ax~a)\n"
+             cx cy cw ch (unbox wb) (unbox hb) vw vh)
+        (shim_widget_set_geometry content-handle cx cy cw ch)))
+
+    ; A hidden bar keeps its last value.  Reading it anyway would leave the
+    ; content scrolled away with nothing to scroll it back, as soon as
+    ; wxpanel.rkt's adjust-panel-size decides the content fits and hides the
+    ; bar.
+    (define/private (content-offset which)
+      (if (if (eq? which 'vertical) v-shown? h-shown?)
+          (get-real-scroll-pos which)
+          0))
 
     ; Fires from the shim's valueChanged signal, i.e. only on real user
     ; interaction: shim_scrollbar_set_range/set_value block the signal for
@@ -563,6 +635,11 @@
       ; geometry to act on.
       (when (and scroll-ready? nw (> nw 0) nh (> nh 0))
         (position-scrollbars! nw nh)
+        ; The client area just changed, so the content widget's minimum does
+        ; too.  Its scroll offset is untouched here -- the panel's own
+        ; relayout re-runs set-scrollbars and comes back through
+        ; reset-dc-for-autoscroll.
+        (position-content!)
         (when (and (is-auto-scroll?) (not (is-panel?)))
           (reset-auto-scroll))
         (on-size)))
@@ -592,6 +669,7 @@
         (set! v-shown? new-v?)
         (apply-visibility!)
         (position-scrollbars!)
+        (position-content!)
         ; Client size just changed, so the retained backing is the wrong size.
         ; The repaint request is not optional: nothing else is guaranteed to
         ; follow show-scrollbars, and an invalidated backing with no repaint
@@ -643,12 +721,61 @@
       (push-range! which))
 
     ; ---- auto-scroll ----------------------------------------------------
-    ; Used by a plain canvas% with an 'auto-?scroll style, where the content
-    ; is painted and a dc offset is all that is needed.  canvas-panel% never
-    ; gets here (no scrollbars are created for it, see want-h?/want-v?).
+    ; Two kinds of content arrive here.  A plain canvas% with an
+    ; 'auto-?scroll style paints itself, so a dc offset is all it needs.  A
+    ; canvas-panel% holds real child widgets, which no dc offset can move --
+    ; for those the content widget is moved instead (position-content!),
+    ; exactly as win32's canvas-panel% moves its content-hwnd.
 
     (define/override (get-virtual-h-pos) (get-real-scroll-pos 'horizontal))
     (define/override (get-virtual-v-pos) (get-real-scroll-pos 'vertical))
+
+    ; The wheel over a scrollable canvas-panel%.  For every other canvas the
+    ; wheel arrives as a key-event% and something downstream turns it into
+    ; scrolling -- editor-canvas% does exactly that (wxme/editor-canvas.rkt:
+    ; 506).  A panel has no editor and its mred-side on-char ignores the code,
+    ; so the event would simply be dropped: gtk scrolls such a panel from its
+    ; scrolled window and win32 from the scrollbar's own window messages,
+    ; while here the canvas widget is the only thing the event reaches.
+    (define/override (qt-wheel-scroll code steps)
+      (define which (case code
+                      [(wheel-up wheel-down)    'vertical]
+                      [(wheel-left wheel-right) 'horizontal]
+                      [else                     #f]))
+      ; Gated on content-handle rather than on (is-auto-scroll?): that flag is
+      ; only set once wxpanel.rkt's panel-redraw has run set-scrollbars for
+      ; the first time, and a wheel event arriving before that would fall
+      ; through and be dropped.  content-handle is the precise condition --
+      ; it exists exactly for a panel that this class scrolls itself, and it
+      ; keeps editor-canvas% (never a panel) out.
+      (define sb (and which
+                      content-handle
+                      (if (eq? which 'vertical)
+                          (and v-shown? v-sb)
+                          (and h-shown? h-sb))))
+      (and sb
+           (let* ([page  (if (eq? which 'vertical) v-page h-page)]
+                  ; A tenth of a page per notch.  Deferring to the bar's own
+                  ; single step is not an option here: reset-auto-scroll hands
+                  ; out `1 1' as the step, and Qt multiplies that by
+                  ; wheelScrollLines -- measured over the bar itself, that is
+                  ; 3 px a notch against a range of several hundred.
+                  [delta (* (max 1 (quotient page 10))
+                            (max 1 (inexact->exact (round steps))))]
+                  [dir   (if (memq code '(wheel-up wheel-left)) -1 1)])
+             (dbg "qt-wheel-scroll ~a ~a steps -> ~a px\n" code steps (* dir delta))
+             (shim_scrollbar_set_value sb (max 0 (+ (get-real-scroll-pos which)
+                                                    (* dir delta))))
+             ; set_value blocks valueChanged (QSignalBlocker), so the move has
+             ; to be reported by hand -- the same path a thumb drag takes.
+             (scroll-changed which)
+             #t)))
+
+    ; get-content-hwnd is what a child asks its parent for at construction
+    ; time (base-canvas%, panel%, button% ... all do), so this is the single
+    ; point that puts a scrollable panel's children into the moving widget.
+    (define/override (get-content-hwnd)
+      (or content-handle (super get-content-hwnd)))
 
     ; Sign convention: set-auto-scroll negates internally (draw-lib
     ; dc.rkt:466-471), so the raw scroll position goes in -- same as win32
@@ -656,6 +783,9 @@
     ; mirrors as well.
     (define/override (reset-dc-for-autoscroll)
       (define dc (get-dc))
+      ; The panel half of the scroll: move the child widgets.  A no-op for a
+      ; canvas without a content widget.
+      (position-content!)
       (send dc reset-backing-retained)
       (send dc set-auto-scroll
             (if (get-virtual-width)  (get-virtual-h-pos) 0)
@@ -683,15 +813,15 @@
 ; only thing missing for a plain canvas% to also work as a panel is
 ; panel-mixin's adopt-child/register-child/etc (docs/HACKING.md §22).
 ;
-; win32's canvas-panel% additionally overrides notify-child-extent (called
-; from win32 window%'s own resize path, which this backend's window.rkt
-; doesn't have) and reset-dc-for-autoscroll (repositions a separate
-; content-hwnd by the scroll offset). This backend has no separate content
-; sub-widget -- get-content-hwnd is the same qt-handle used for painting --
-; so the inherited no-op reset-dc-for-autoscroll is used as-is: real
-; virtual-scroll child repositioning is not implemented (no driver's
-; content overflows enough to need it; same scoping call as list-box%'s
-; single-column decision).
+; The separate content widget that win32's canvas-panel% keeps (and moves in
+; its reset-dc-for-autoscroll) lives in qt-canvas-scroll-mixin here rather
+; than in this class: it has to be created before the scrollbars to end up
+; below them in Qt's sibling stacking order, and only that mixin runs early
+; enough.  win32's other canvas-panel% override, notify-child-extent, has no
+; counterpart -- it is called from win32 window%'s own resize path, which this
+; backend's window.rkt does not have; the content widget is instead sized from
+; canvas-autoscroll-mixin's virtual size, which wxpanel.rkt's panel-redraw
+; sets (via set-scrollbars) before it places any child.
 (define canvas-panel%
   (class (panel-mixin canvas%)
     (define/override (is-panel?) #t)
