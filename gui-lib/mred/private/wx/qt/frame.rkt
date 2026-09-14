@@ -36,6 +36,21 @@
                [parent     parent]
                [eventspace (current-eventspace)])
 
+    ; Native resize notification (docs/HACKING.md §21.7). Wired here, after
+    ; super-new, so resizeEvents fired during QMainWindow construction are
+    ; dropped rather than posted into a half-built object. Per Regel 2 the
+    ; atomic C callback only posts; all decisions happen in the thunk.
+    (define resize-cb
+      (lambda (ud nw nh)
+        (qt-queue-window-event this
+          (lambda ()
+            ; remember-size reports #f when the size already matches the cache
+            ; -- which is exactly the case when this notification is the echo of
+            ; our own set-size. Only a real, externally driven change relayouts.
+            (when (send this remember-size nw nh)
+              (queue-on-size))))))
+    (shim_window_set_resize_cb qt-handle resize-cb #f)
+
     (shim_window_set_title qt-handle (or label ""))
     (let ([nw (if (and w  (> w  0)) w  400)]
           [nh (if (and h  (> h  0)) h  300)])

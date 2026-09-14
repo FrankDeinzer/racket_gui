@@ -12,6 +12,7 @@
          shim_window_create
          shim_window_set_title
          shim_window_set_size
+         shim_window_set_resize_cb
          shim_window_show
          shim_window_destroy
          shim_window_get_content_widget
@@ -113,6 +114,7 @@
          _mouse_cb_t
          _key_cb_t
          _focus_cb_t
+         _resize_cb_t
          _file_dialog_cb_t)
 
 ; Locate the shim library.
@@ -152,6 +154,10 @@
 (define _focus_cb_t
   (_fun #:atomic? #t _pointer _int -> _void))
 
+; Native top-level resize callback: ud, new width, new height.
+(define _resize_cb_t
+  (_fun #:atomic? #t _pointer _int _int -> _void))
+
 ; File dialog result callback: ud, path (raw pointer -- NULL on cancel; the
 ; Racket wrapper in filedialog.rkt casts it to _string/utf-8 itself, since
 ; _string/utf-8's coretype (bytes) can't be wrapped in _or-null).
@@ -184,6 +190,10 @@
 (define shim_window_set_size
   (get-ffi-obj "shim_window_set_size" shim-lib
                (_fun _pointer _int _int -> _void)))
+
+(define shim_window_set_resize_cb
+  (get-ffi-obj "shim_window_set_resize_cb" shim-lib
+               (_fun _pointer _resize_cb_t _pointer -> _void)))
 
 (define shim_window_show
   (get-ffi-obj "shim_window_show" shim-lib

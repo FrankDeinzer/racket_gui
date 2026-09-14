@@ -67,6 +67,19 @@
       (when y  (set! y-pos y))
       (when (and nw (> nw 0)) (set! w nw))
       (when (and nh (> nh 0)) (set! h nh)))
+    ; Records a size that the toolkit reports (rather than one Racket asked
+    ; for) and answers whether it actually changed. Mirrors wx/gtk/window.rkt's
+    ; remember-size, including the reason it exists: set-size updates this cache
+    ; BEFORE resizing the native window, so the resize notification echoing back
+    ; from our own set-size finds the cache already equal and reports #f. That
+    ; is what keeps a native resize -> queue-on-size -> correct-size -> set-size
+    ; -> native resize chain from running forever (docs/HACKING.md §21.7,
+    ; Fix-Versuch 1 died exactly there).
+    (define/public (remember-size nw nh)
+      (cond
+        [(or (not (positive? nw)) (not (positive? nh))) #f]
+        [(and (= w nw) (= h nh)) #f]
+        [else (set! w nw) (set! h nh) #t]))
     (define/public (move x y)
       (set! x-pos x) (set! y-pos y))
     (define/public (center dir [parent #f]) (void))
