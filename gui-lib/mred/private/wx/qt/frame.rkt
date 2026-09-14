@@ -146,10 +146,30 @@
         (values (unbox wb) (unbox hb))))
     ; Attaches a QMenuBar to this QMainWindow.
     ; mb is wx-menu-bar% (glue extends platform menu-bar%).
+    (define menubar-handle #f)
     (define/override (set-menu-bar mb)
       (when mb
-        (shim_window_set_menubar qt-handle (send mb get-menubar-handle))
+        (set! menubar-handle (send mb get-menubar-handle))
+        (shim_window_set_menubar qt-handle menubar-handle)
         (send mb set-frame this)))
+
+    ; The QMenuBar lives inside the QMainWindow, so it consumes client height
+    ; that window%'s raw w/h cache knows nothing about. wxtop.rkt's correct-size
+    ; derives the chrome allowance as (- (get-height) client-h) and set-panel-size
+    ; hands the panel client-h directly -- with no subtraction here both are off
+    ; by the menu bar height: the frame's minimum is computed too small AND the
+    ; panel is laid out taller than the visible area. gtk does the same
+    ; subtraction via adjust-client-delta (wx/gtk/frame.rkt:291), win32 via
+    ; client-dh (wx/win32/frame.rkt:694).
+    ; Queried lazily rather than cached at set-menu-bar time: at that point the
+    ; bar has no actions yet and reports sizeHint 0 (measured), so a cached value
+    ; would be permanently wrong.
+    (define/override (get-client-size xb yb)
+      (super get-client-size xb yb)
+      (when menubar-handle
+        (define-values (mw mh) (shim_widget_get_size_hint menubar-handle))
+        (when (positive? mh)
+          (set-box! yb (max 1 (- (unbox yb) mh))))))
 
     ; on-menu-command, on-menu-click, on-toolbar-click, on-mdi-activate:
     ; override* targets from wx-frame% — frame% overrides window%'s stubs
