@@ -86,6 +86,13 @@
     (define/override (is-enabled-to-root?) (send this is-window-enabled?))
     (define/override (is-frame?) #t)
 
+    ; ACHTUNG, die Reihenfolge ist tragend (docs/HACKING.md §32): `super set-size`
+    ; schreibt den w/h-Cache, und das MUSS vor `shim_window_set_size` passieren.
+    ; Qt meldet den von uns ausgeloesten Resize naemlich per resizeEvent zurueck;
+    ; window%s `remember-size` erkennt ihn nur dann als Echo des eigenen Aufrufs
+    ; (Cache bereits gleich) und unterdrueckt das `queue-on-size`. Vertauscht man
+    ; die beiden Zeilen, sieht remember-size eine echte Aenderung und startet die
+    ; Endlosschleife wieder, an der §21.7s Fix-Versuch 1 gescheitert ist.
     (define/override (set-size nx ny nw nh)
       (super set-size nx ny nw nh)
       (when (and nw (> nw 0) nh (> nh 0))
