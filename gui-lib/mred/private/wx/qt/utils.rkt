@@ -33,6 +33,7 @@
          shim_canvas_set_mouse_cb
          shim_canvas_set_key_cb
          shim_canvas_set_focus_cb
+         shim_canvas_set_wheel_cb
          shim_canvas_blit_argb
          shim_canvas_request_repaint
          shim_canvas_get_width
@@ -114,6 +115,7 @@
          _mouse_cb_t
          _key_cb_t
          _focus_cb_t
+         _wheel_cb_t
          _resize_cb_t
          _file_dialog_cb_t)
 
@@ -153,6 +155,11 @@
 ; Focus callback: ud, gained(1=focus-in, 0=focus-out)
 (define _focus_cb_t
   (_fun #:atomic? #t _pointer _int -> _void))
+
+; Mouse wheel callback: ud, dx, dy (Qt angleDelta, eighths of a degree; one
+; notch = 120, dy > 0 = away from the user = scroll up), mods-bitmask.
+(define _wheel_cb_t
+  (_fun #:atomic? #t _pointer _int _int _int -> _void))
 
 ; Native top-level resize callback: ud, new width, new height.
 (define _resize_cb_t
@@ -285,6 +292,10 @@
 (define shim_canvas_set_focus_cb
   (get-ffi-obj "shim_canvas_set_focus_cb" shim-lib
                (_fun _pointer _focus_cb_t _pointer -> _void)))
+
+(define shim_canvas_set_wheel_cb
+  (get-ffi-obj "shim_canvas_set_wheel_cb" shim-lib
+               (_fun _pointer _wheel_cb_t _pointer -> _void)))
 
 (define shim_canvas_blit_argb
   (get-ffi-obj "shim_canvas_blit_argb" shim-lib

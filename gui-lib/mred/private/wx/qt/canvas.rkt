@@ -65,6 +65,12 @@
 
     (super-new [transparent? #f])))
 
+; One wheel notch is 120 angleDelta units (Qt's documented convention).  A
+; high-resolution device sends smaller increments; report at least one step so
+; such a device still scrolls, matching gtk's 'integer wheel-steps mode.
+(define (wheel-delta->steps d)
+  (max 1 (round (/ (abs d) 120))))
+
 ; ---- base canvas class (inner, wrapped by canvas-mixin) ---------------
 
 (define base-canvas%
@@ -77,6 +83,9 @@
 
     (define the-eventspace (current-eventspace))
     (define the-parent     parent)
+    ; `style' is an init variable, which a method may not close over -- copy
+    ; it into a field so qt-canvas-scroll-mixin can ask for it.
+    (define the-style      style)
 
     ; expose-cb fires when Qt issues a showEvent or resizeEvent.
     ; It runs #:atomic? #t so we only enqueue work — no Racket calls.
@@ -167,9 +176,38 @@
             (queue-event the-eventspace (lambda () (send this on-set-focus)))
             (queue-event the-eventspace (lambda () (send this on-kill-focus))))))
 
+    ; Wheel: dx/dy in Qt angleDelta units (one notch = 120; dy > 0 = up).
+    ; racket/gui delivers the wheel as a key-event% whose key-code is
+    ; 'wheel-up/'wheel-down/'wheel-left/'wheel-right with a wheel-steps count
+    ; -- that is what wxme/editor-canvas.rkt's on-char consumes, and what
+    ; wx/gtk/window.rkt's connect-scroll produces.  Vertical wins when a
+    ; single event carries both axes (a trackpad diagonal), matching gtk's
+    ; y-before-x ordering.
+    (define wheel-cb
+      (lambda (ud dx dy mods)
+        (define-values (code steps)
+          (cond
+            [(> dy 0) (values 'wheel-up    (wheel-delta->steps dy))]
+            [(< dy 0) (values 'wheel-down  (wheel-delta->steps dy))]
+            [(> dx 0) (values 'wheel-right (wheel-delta->steps dx))]
+            [(< dx 0) (values 'wheel-left  (wheel-delta->steps dx))]
+            [else     (values #f 0)]))
+        (when code
+          (define e
+            (new key-event%
+                 [key-code     code]
+                 [shift-down   (qt-mods->shift?   mods)]
+                 [control-down (qt-mods->control? mods)]
+                 [meta-down    (qt-mods->meta?    mods)]
+                 [alt-down     (qt-mods->alt?     mods)]))
+          (send e set-wheel-steps steps)
+          (queue-event the-eventspace
+                       (lambda () (send this dispatch-on-char e #f))))))
+
     (shim_canvas_set_mouse_cb qt-handle mouse-cb #f)
     (shim_canvas_set_key_cb   qt-handle key-cb   #f)
     (shim_canvas_set_focus_cb qt-handle focus-cb #f)
+    (shim_canvas_set_wheel_cb qt-handle wheel-cb #f)
 
     (super-new [handle     qt-handle]
                [parent     parent]
@@ -231,6 +269,20 @@
         ; win32/gtk do the same on their own resize hooks (on-resized/
         ; internal-on-client-size -> reset-dc -> reset-backing-retained).
         (send dc reset-backing-retained)))
+
+    ; `on-size' exists for editor-canvas% only, exactly as in wx/win32/canvas.rkt
+    ; and wx/gtk/canvas.rkt: those backends call it from their own set-size.
+    ; Here the call sits in qt-canvas-scroll-mixin (below), because the
+    ; autoscroll state it guards on lives in a class *above* base-canvas%.
+    ; NOTE: this overrides window%'s two-argument `on-size' stub (which has no
+    ; callers) with the zero-argument shape editor-canvas% overrides.
+    (define/override (on-size) (void))
+    (define/public (is-panel?) #f)
+
+    ; qt-canvas-scroll-mixin needs the style list, but cannot declare its own
+    ; `init' without breaking the by-position init-arg pass-through that the
+    ; mixin chain relies on.
+    (define/public (get-canvas-style) the-style)
 
     (define/override (get-client-size wb hb)
       (set-box! wb (max 1 (shim_canvas_get_width  qt-handle)))
@@ -297,7 +349,9 @@
     ; NOTE: min-client-width and min-client-height are NOT defined here.
     ; They are added by make-item% via public* as case-lambda parameters.
 
-    ; Scroll stubs — no scrollbars in the spike
+    ; Scroll API: these defaults apply to a canvas without scrollbars.
+    ; qt-canvas-scroll-mixin (below) overrides them when the style asks for
+    ; scrollbars; win32/gtk carry the same no-scrollbar fallbacks inline.
     (define/public (get-scroll-pos which)           0)
     (define/public (set-scroll-pos which v)         (void))
     (define/public (get-scroll-page which)          0)
@@ -325,12 +379,299 @@
     (define/public (append-combo-item s)  #f)
     (define/public (set-combo-text t)     (void))))
 
+; ---- qt-canvas-scroll-mixin -------------------------------------------
+; Real scrollbars for canvas%, as QScrollBar children of the canvas widget.
+;
+; Sits between canvas-autoscroll-mixin and canvas-mixin.  It has to live here
+; and not in base-canvas% for two reasons:
+;   * canvas-autoscroll-mixin is applied *above* base-canvas%, so the methods
+;     this class overrides (do-set-scrollbars, reset-dc-for-autoscroll,
+;     get-virtual-{h,v}-pos) are define/public there and cannot be overridden
+;     from below (public*/override* invariant, docs/HACKING.md §1).  win32/gtk
+;     do not have this problem: there the mixin is a *superclass* of the
+;     platform canvas.
+;   * that same inversion means canvas-autoscroll-mixin's state does not exist
+;     yet while base-canvas%'s constructor runs -- hence scroll-ready? below.
+;
+; Structural difference to the other backends: win32 gets its scrollbars from
+; WS_HSCROLL/WS_VSCROLL window styles (non-client area) and gtk packs them as
+; siblings in a box, so in both the client area shrinks by itself.  Here they
+; are children of the canvas widget, so get-client-size has to subtract their
+; extent explicitly.
+(define (qt-canvas-scroll-mixin %)
+  (class %
+    (inherit is-auto-scroll? is-disabled-scroll? reset-auto-scroll
+             refresh-for-autoscroll get-virtual-width get-virtual-height
+             is-panel? on-size on-scroll get-canvas-style get-qt-handle
+             get-dc get-eventspace refresh)
+
+    ; Guard for the seed set-size call in base-canvas%'s constructor: that one
+    ; runs inside our own (super-new), i.e. before canvas-autoscroll-mixin's
+    ; fields exist.  Defined before super-new so it is readable at that point
+    ; (same pattern as gtk/canvas.rkt's `dc' field).
+    (define scroll-ready? #f)
+
+    (super-new)
+
+    (define scroll-style (get-canvas-style))
+
+    ; canvas-panel% is deliberately excluded: its content is real child
+    ; widgets, which a paint-offset cannot move.  Scrolling those needs a
+    ; separate content widget to reposition (win32 moves its content-hwnd in
+    ; reset-dc-for-autoscroll) -- that is the '(auto-vscroll) panel case
+    ; (docs/HACKING.md §25.2) and is not implemented here.  Creating
+    ; scrollbars for it would show a scrollbar that moves nothing.
+    (define want-h?
+      (and (not (is-panel?))
+           (or (memq 'hscroll scroll-style) (memq 'auto-hscroll scroll-style))
+           #t))
+    (define want-v?
+      (and (not (is-panel?))
+           (or (memq 'vscroll scroll-style) (memq 'auto-vscroll scroll-style))
+           #t))
+
+    ; Bound to fields before being handed to the shim: an inline lambda would
+    ; have no Racket-side owner, so the closure could be collected while Qt
+    ; still holds the pointer (the use-after-free found and then lost with the
+    ; revert in §24.5).  Same convention as mouse-cb/key-cb/focus-cb.
+    (define h-changed-cb (lambda (ud) (scroll-changed 'horizontal)))
+    (define v-changed-cb (lambda (ud) (scroll-changed 'vertical)))
+
+    (define h-sb (and want-h?
+                      (shim_scrollbar_create (get-qt-handle) 0 h-changed-cb #f)))
+    (define v-sb (and want-v?
+                      (shim_scrollbar_create (get-qt-handle) 1 v-changed-cb #f)))
+
+    ; Thickness from the widget's own size hint, not a hard-coded number:
+    ; it is style- and DPI-dependent.
+    (define h-thickness
+      (if h-sb (let-values ([(w h) (shim_widget_get_size_hint h-sb)]) (max 1 h)) 0))
+    (define v-thickness
+      (if v-sb (let-values ([(w h) (shim_widget_get_size_hint v-sb)]) (max 1 w)) 0))
+
+    ; Start visible exactly like win32, where WS_?SCROLL makes the bar present
+    ; from creation; editor-canvas% calls show-scrollbars during its own setup
+    ; and corrects this immediately.
+    (define h-shown? want-h?)
+    (define v-shown? want-v?)
+
+    ; Racket-side mirror of each bar's range/page/step.  Needed because the
+    ; shim sets range, page and step in one call while wx hands them over
+    ; separately (set-scroll-range / set-scroll-page), and because a read-back
+    ; would have to cross the FFI for values we already know.  The *position*
+    ; is deliberately not mirrored -- the user moves it, so Qt owns it.
+    (define h-len 0)  (define v-len 0)
+    (define h-page 1) (define v-page 1)
+    (define h-step 1) (define v-step 1)
+
+    (set! scroll-ready? #t)
+
+    (when (or h-sb v-sb)
+      (push-range! 'horizontal)
+      (push-range! 'vertical)
+      (apply-visibility!)
+      (position-scrollbars!))
+
+    ; ---- internals ------------------------------------------------------
+
+    (define/private (sb-of which) (if (eq? which 'vertical) v-sb h-sb))
+
+    ; Scroll tracing, off unless PLT_QT_SCROLL_DEBUG is set.  Separate from
+    ; PLT_QT_DEBUG on purpose: that one also turns on the per-paint logging,
+    ; which drowns the scroll sequence.  The id tags one canvas instance --
+    ; a DrRacket frame has dozens, so untagged lines are unreadable.
+    (define dbg-id (gensym 'c))
+    (define (dbg fmt . args)
+      (when (getenv "PLT_QT_SCROLL_DEBUG")
+        (apply eprintf (string-append "[sb ~a] " fmt) dbg-id args)))
+
+    (define/private (push-range! which)
+      (define sb (sb-of which))
+      (when sb
+        (shim_scrollbar_set_range sb
+                                  (if (eq? which 'vertical) v-len  h-len)
+                                  (if (eq? which 'vertical) v-page h-page)
+                                  (if (eq? which 'vertical) v-step h-step))))
+
+    (define/private (apply-visibility!)
+      (when h-sb (shim_widget_set_visible h-sb (if h-shown? 1 0)))
+      (when v-sb (shim_widget_set_visible v-sb (if v-shown? 1 0))))
+
+    ; Right edge / bottom edge of the canvas widget, leaving the corner free
+    ; when both bars are up.  set-size passes the size it was handed, so the
+    ; bars are placed against the same number as the rest of that call rather
+    ; than against a widget geometry that may still be catching up.
+    (define/private (position-scrollbars! [w0 #f] [h0 #f])
+      (define hdl (get-qt-handle))
+      (define w (or w0 (max 1 (shim_canvas_get_width  hdl))))
+      (define h (or h0 (max 1 (shim_canvas_get_height hdl))))
+      (define vt (if (and v-sb v-shown?) v-thickness 0))
+      (define ht (if (and h-sb h-shown?) h-thickness 0))
+      (when v-sb
+        (shim_widget_set_geometry v-sb (max 0 (- w vt)) 0
+                                  vt (max 1 (- h ht))))
+      (when h-sb
+        (shim_widget_set_geometry h-sb 0 (max 0 (- h ht))
+                                  (max 1 (- w vt)) ht)))
+
+    ; Fires from the shim's valueChanged signal, i.e. only on real user
+    ; interaction: shim_scrollbar_set_range/set_value block the signal for
+    ; programmatic changes (QSignalBlocker), so gtk's as-scroll-change
+    ; suppression has no counterpart here.
+    (define/private (scroll-changed which)
+      (dbg "scroll-changed ~a -> ~a\n" which (get-real-scroll-pos which))
+      (queue-event
+       (get-eventspace)
+       (lambda ()
+         (if (is-auto-scroll?)
+             (refresh-for-autoscroll)
+             (on-scroll (new scroll-event%
+                             [event-type 'thumb]
+                             [direction  which]
+                             ; scroll-event%'s position is contracted to
+                             ; 0..10000 while editor-canvas% clamps its own
+                             ; ranges to 10000000 -- clamp rather than raise.
+                             [position   (max 0 (min 10000
+                                                     (get-real-scroll-pos which)))]))))))
+
+    (define/private (get-real-scroll-pos which)
+      (define sb (sb-of which))
+      (if sb (shim_scrollbar_get_value sb) 0))
+
+    (define/private (is-disabled-scroll-dir? which)
+      (or (not (sb-of which))
+          (is-disabled-scroll?)))
+
+    ; ---- sizing ---------------------------------------------------------
+
+    ; win32 (canvas.rkt:306-309) and gtk (canvas.rkt:450-454) do exactly this.
+    ; Without it editor-canvas% never learns that it was resized, so its
+    ; scrollbar bookkeeping stays frozen at the construction-time placeholder
+    ; geometry (docs/HACKING.md §24.5's central measurement).
+    ; on-size is reported unconditionally, as in win32 (canvas.rkt:309).  A
+    ; dedup on the last size was tried here -- the §32 lesson -- on the theory
+    ; that the on-size -> reset-size -> scrollbar -> relayout -> set-size round
+    ; trip was leaving a canvas at the wrong height.  Measured with
+    ; PLT_QT_SCROLL_DEBUG: it changes nothing (the transient full-height
+    ; client size it was meant to remove is just as present with the guard as
+    ; without, and in runs that render correctly), so it was dropped rather
+    ; than kept as unjustified state.  editor-canvas% dedups on its own
+    ; anyway, in maybe-reset-size.
+    (define/override (set-size x y nw nh)
+      (super set-size x y nw nh)
+      ; Mirrors base-canvas%'s own guard: a non-positive size carries no
+      ; geometry to act on.
+      (when (and scroll-ready? nw (> nw 0) nh (> nh 0))
+        (position-scrollbars! nw nh)
+        (when (and (is-auto-scroll?) (not (is-panel?)))
+          (reset-auto-scroll))
+        (on-size)))
+
+    ; The bars sit inside the canvas widget, so they eat client area.
+    (define/override (get-client-size wb hb)
+      (super get-client-size wb hb)
+      (dbg "get-client-size raw=~ax~a shown=~a/~a thick=~a/~a\n"
+           (unbox wb) (unbox hb) h-shown? v-shown? h-thickness v-thickness)
+      (when scroll-ready?
+        (when (and v-sb v-shown?)
+          (set-box! wb (max 1 (- (unbox wb) v-thickness))))
+        (when (and h-sb h-shown?)
+          (set-box! hb (max 1 (- (unbox hb) h-thickness))))))
+
+    ; ---- wx scroll API --------------------------------------------------
+
+    (define/override (show-scrollbars h? v?)
+      (define new-h? (and h? want-h? #t))
+      (define new-v? (and v? want-v? #t))
+      (dbg "show-scrollbars ~a ~a (was ~a ~a)\n" new-h? new-v? h-shown? v-shown?)
+      ; Dedup as in win32 (canvas.rkt:414-417).  editor-canvas%'s reset-size
+      ; re-runs itself whenever the bars change, so an unconditional update
+      ; here would keep re-triggering that loop.
+      (unless (and (eq? new-h? h-shown?) (eq? new-v? v-shown?))
+        (set! h-shown? new-h?)
+        (set! v-shown? new-v?)
+        (apply-visibility!)
+        (position-scrollbars!)
+        ; Client size just changed, so the retained backing is the wrong size.
+        ; The repaint request is not optional: nothing else is guaranteed to
+        ; follow show-scrollbars, and an invalidated backing with no repaint
+        ; leaves the canvas blank.  win32 does both in its reset-dc
+        ; (canvas.rkt:276-285, called from show-scrollbars at :426).
+        (send (get-dc) reset-backing-retained)
+        (refresh)))
+
+    (define/override (do-set-scrollbars hs vs h-l v-l h-p v-p h-pos v-pos)
+      (dbg "do-set-scrollbars step=~a/~a len=~a/~a page=~a/~a pos=~a/~a\n"
+           hs vs h-l v-l h-p v-p h-pos v-pos)
+      (set! h-step (max 1 hs)) (set! v-step (max 1 vs))
+      (set! h-len h-l)         (set! v-len v-l)
+      (set! h-page (max 1 h-p)) (set! v-page (max 1 v-p))
+      (push-range! 'horizontal)
+      (push-range! 'vertical)
+      ; -1 means "keep the current position" (see gtk's configure-adj).
+      (when (and h-sb (>= h-pos 0)) (shim_scrollbar_set_value h-sb h-pos))
+      (when (and v-sb (>= v-pos 0)) (shim_scrollbar_set_value v-sb v-pos)))
+
+    ; Gating mirrors win32/gtk exactly: in auto-scroll mode the canvas-level
+    ; scroll API reports zero and view-start/get-virtual-*-pos are used
+    ; instead.  editor-canvas% relies on this.
+    (define/override (get-scroll-pos which)
+      (if (or (is-disabled-scroll-dir? which) (is-auto-scroll?))
+          0
+          (get-real-scroll-pos which)))
+    (define/override (set-scroll-pos which v)
+      (dbg "set-scroll-pos ~a ~a\n" which v)
+      (define sb (sb-of which))
+      (when sb (shim_scrollbar_set_value sb v)))
+
+    (define/override (get-scroll-range which)
+      (if (or (is-disabled-scroll-dir? which) (is-auto-scroll?))
+          0
+          (if (eq? which 'vertical) v-len h-len)))
+    (define/override (set-scroll-range which v)
+      (dbg "set-scroll-range ~a ~a\n" which v)
+      (if (eq? which 'vertical) (set! v-len v) (set! h-len v))
+      (push-range! which))
+
+    (define/override (get-scroll-page which)
+      (if (or (is-disabled-scroll-dir? which) (is-auto-scroll?))
+          0
+          (if (eq? which 'vertical) v-page h-page)))
+    (define/override (set-scroll-page which v)
+      (dbg "set-scroll-page ~a ~a\n" which v)
+      (if (eq? which 'vertical) (set! v-page (max 1 v)) (set! h-page (max 1 v)))
+      (push-range! which))
+
+    ; ---- auto-scroll ----------------------------------------------------
+    ; Used by a plain canvas% with an 'auto-?scroll style, where the content
+    ; is painted and a dc offset is all that is needed.  canvas-panel% never
+    ; gets here (no scrollbars are created for it, see want-h?/want-v?).
+
+    (define/override (get-virtual-h-pos) (get-real-scroll-pos 'horizontal))
+    (define/override (get-virtual-v-pos) (get-real-scroll-pos 'vertical))
+
+    ; Sign convention: set-auto-scroll negates internally (draw-lib
+    ; dc.rkt:466-471), so the raw scroll position goes in -- same as win32
+    ; (canvas.rkt:278-284), whose gating on get-virtual-width/height this
+    ; mirrors as well.
+    (define/override (reset-dc-for-autoscroll)
+      (define dc (get-dc))
+      (send dc reset-backing-retained)
+      (send dc set-auto-scroll
+            (if (get-virtual-width)  (get-virtual-h-pos) 0)
+            (if (get-virtual-height) (get-virtual-v-pos) 0))
+      ; As in win32 (canvas.rkt:445-447): refresh here, because
+      ; canvas-autoscroll-mixin's set-scrollbars calls this one directly when
+      ; auto-scroll is switched off, without a refresh of its own.
+      (refresh))))
+
 ; ---- canvas% = canvas-mixin applied to base-canvas% --------------------
 
 (define canvas%
   (canvas-mixin
-   (canvas-autoscroll-mixin
-    base-canvas%)))
+   (qt-canvas-scroll-mixin
+    (canvas-autoscroll-mixin
+     base-canvas%))))
 
 ; ---- canvas-panel% = canvas% + panel-mixin -----------------------------
 ; A scrollable canvas that also hosts children (e.g. framework/private/
@@ -353,5 +694,5 @@
 ; single-column decision).
 (define canvas-panel%
   (class (panel-mixin canvas%)
-    (define/public (is-panel?) #t)
+    (define/override (is-panel?) #t)
     (super-new)))
