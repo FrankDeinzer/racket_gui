@@ -23,7 +23,8 @@
          "menu-item.rkt"
          "message.rkt"
          "filedialog.rkt"
-         "queue.rkt")
+         "queue.rkt"
+         "utils.rkt")
 
 (provide (protect-out platform-values))
 
@@ -148,18 +149,60 @@
     (define/public   (command e) (void))
     (define/override (gets-focus?) #t)))
 
+; Text only (docs/2026-09-14-4_report-linux.md "Nachtrag": copy/paste was a
+; pure no-op stub). Method names/arities follow the contract wx/common/
+; clipboard.rkt's clipboard% actually calls (verified against gtk's/cocoa's
+; clipboard-driver% -- NOT the previous stub's ad-hoc get-data/set-data/
+; same-client? names, which nothing in shared code ever called).
+;
+; QClipboard is a plain synchronous global, so unlike gtk's async ownership-
+; callback dance we write through eagerly on set-client and read back live
+; on every get-text-data/get-data("TEXT") -- always correct even when some
+; other application changed the system clipboard behind our back. Only the
+; non-text "WXME" rich-paste format (wxme/editor.rkt) needs the client-owns-
+; clipboard check below, so a real self-copy/paste round-trips formatting
+; while an external-app copy falls back to plain text.
 (define clipboard-driver%
   (class object%
     (init [x-selection? #f])
     (super-new)
-    (define/public (get-data fmt)        #f)
-    (define/public (set-data fmt data)   (void))
-    (define/public (get-text-data)       #f)
-    (define/public (set-text-data s)     (void))
-    (define/public (clear-data)          (void))
-    (define/public (get-client)          #f)
-    (define/public (set-client c event)  (void))
-    (define/public (same-client? c)      #f)))
+
+    (define client #f)
+    (define client-types #f)
+    (define last-set-text #f)
+
+    (define (native-text)
+      (and (shim_clipboard_has_text) (shim_clipboard_get_text)))
+
+    (define (client-owns-clipboard?)
+      (and client (equal? (native-text) last-set-text)))
+
+    (define/public (get-client)
+      (and (client-owns-clipboard?) client))
+
+    (define/public (set-client c orig-types)
+      (define d (send c get-data "TEXT"))
+      (define txt (cond [(bytes? d) (bytes->string/utf-8 d #\?)]
+                         [(string? d) d]
+                         [else #f]))
+      (set! client c)
+      (set! client-types orig-types)
+      (set! last-set-text txt)
+      (when txt (shim_clipboard_set_text txt)))
+
+    (define/public (get-data fmt)
+      (cond
+        [(equal? fmt "TEXT") (native-text)]
+        [(and (client-owns-clipboard?) (member fmt client-types))
+         (send client get-data fmt)]
+        [else #f]))
+
+    (define/public (get-text-data) (or (native-text) ""))
+
+    ; Bitmap clipboard is out of scope for this spike (never worked before
+    ; either -- the old stub had no methods for it at all).
+    (define/public (get-bitmap-data)         #f)
+    (define/public (set-bitmap-data bm time) (void))))
 
 (define cursor-driver%
   (class object%

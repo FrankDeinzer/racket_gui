@@ -111,6 +111,9 @@
          shim_group_panel_get_content_widget
          shim_group_panel_get_content_margins
          shim_group_panel_set_label
+         shim_clipboard_set_text
+         shim_clipboard_get_text
+         shim_clipboard_has_text
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -659,3 +662,15 @@
 (define shim_group_panel_set_label
   (get-ffi-obj "shim_group_panel_set_label" shim-lib
                (_fun _pointer _string/utf-8 -> _void)))
+
+; ---- clipboard --------------------------------------------------------
+
+(define shim_clipboard_set_text
+  (get-ffi-obj "shim_clipboard_set_text" shim-lib
+               (_fun _string/utf-8 -> _void)))
+(define shim_clipboard_get_text
+  (get-ffi-obj "shim_clipboard_get_text" shim-lib
+               (_fun -> _string/utf-8)))
+(define shim_clipboard_has_text
+  (get-ffi-obj "shim_clipboard_has_text" shim-lib
+               (_fun -> _bool)))
