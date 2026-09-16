@@ -10,6 +10,7 @@
 (require racket/class
          racket/string
          ffi/unsafe
+         "../../lock.rkt"
          "../common/queue.rkt"
          "window.rkt"
          "utils.rkt")
@@ -109,4 +110,18 @@
      (dbg "[qt-filedialog] shim_file_dialog_create returned, yielding\n")
      (yield (semaphore-peek-evt done-sema))
      (dbg "[qt-filedialog] yield returned, result=~a\n" (unbox result-box))
+     ; Crash B (docs/HACKING.md §19, §39): the C-side `finished` handler
+     ; already called deleteLater() on the QFileDialog before posting this
+     ; result. With a frame open, the running event pump drains that
+     ; DeferredDelete event long before anything calls (exit) -- but in a
+     ; frameless script, this return value is the caller's last act before
+     ; the module (and the process) exits, and nothing else guaranteed one
+     ; more pump cycle first. Left undrained, Qt's own atexit-time event
+     ; flush delivered it instead, destroying the dialog while other Qt
+     ; globals were already torn down -- a hard native crash deep inside
+     ; QSettings construction (measured via gdb backtrace, not guessed). One
+     ; more explicit, top-level pump here -- same primitive/pattern as
+     ; queue.rkt's wakeup hook, no new event loop -- guarantees the delete
+     ; runs now, under normal conditions, before the caller can exit.
+     (atomically (shim_pump 0))
      (unbox result-box)]))
