@@ -40,6 +40,24 @@
     (define/public (set-parent p) (set! the-parent p))
     (define/public (get-parent-obj) the-parent)
 
+    ; ---- about-to-show -> on-menu-click -> on-demand (docs/HACKING.md §37) --
+    ; win32 hooks WM_INITMENU, gtk hooks the top-level GtkMenuItem's "select"
+    ; signal -- both fire once, right before ANY menu (top-level or nested)
+    ; becomes visible, and call the frame's on-menu-click, which cascades
+    ; on-demand through the whole menu-bar tree (mrmenu.rkt's menu-bar%/menu%
+    ; on-demand recurse into every item, including submenus) before the user
+    ; sees stale enable/check state. Qt's equivalent per-menu signal is
+    ; QMenu::aboutToShow. Retained as a field, same lifetime pattern as
+    ; frame.rkt's resize-cb -- alive as long as this menu% object is.
+    (define about-to-show-cb
+      (lambda (_ud)
+        (let ([frame (find-top-frame)])
+          (when frame
+            (queue-event (send frame get-eventspace)
+              (lambda ()
+                (send frame on-menu-click)))))))
+    (shim_menu_set_about_to_show_cb qt-menu about-to-show-cb #f)
+
     ; ---- item tracking ------------------------------------------------------
     ; item-table: id → QAction* (leaf items only)
     (define item-table (make-hasheq))
