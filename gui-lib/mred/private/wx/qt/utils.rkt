@@ -115,6 +115,10 @@
          shim_clipboard_set_text
          shim_clipboard_get_text
          shim_clipboard_has_text
+         shim_cursor_create_standard
+         shim_cursor_create_from_argb
+         shim_widget_set_cursor
+         shim_widget_unset_cursor
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -679,3 +683,18 @@
 (define shim_clipboard_has_text
   (get-ffi-obj "shim_clipboard_has_text" shim-lib
                (_fun -> _bool)))
+
+; ---- cursor -------------------------------------------------------------
+
+(define shim_cursor_create_standard
+  (get-ffi-obj "shim_cursor_create_standard" shim-lib
+               (_fun _string/utf-8 -> _pointer)))
+(define shim_cursor_create_from_argb
+  (get-ffi-obj "shim_cursor_create_from_argb" shim-lib
+               (_fun _bytes _int _int _int _int -> _pointer)))
+(define shim_widget_set_cursor
+  (get-ffi-obj "shim_widget_set_cursor" shim-lib
+               (_fun _pointer _pointer -> _void)))
+(define shim_widget_unset_cursor
+  (get-ffi-obj "shim_widget_unset_cursor" shim-lib
+               (_fun _pointer -> _void)))

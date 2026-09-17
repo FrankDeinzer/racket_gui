@@ -5,6 +5,7 @@
 (require racket/class
          racket/draw
          "../common/default-procs.rkt"
+         "../common/cursor-draw.rkt"
          "frame.rkt"
          "canvas.rkt"
          "button.rkt"
@@ -204,13 +205,42 @@
     (define/public (get-bitmap-data)         #f)
     (define/public (set-bitmap-data bm time) (void))))
 
+; QCursor supports true ARGB images directly, so unlike win32's AND/XOR-mask
+; HCURSOR dance, a custom cursor here is just "turn a bitmap%+mask into an
+; ARGB buffer, hand it to the shim" -- image->argb-handle below is that one
+; conversion, shared by set-image and by 'bullseye (the one standard symbol
+; with no native Qt::CursorShape, drawn the same way win32/gtk draw it).
+(define (image->argb-handle image mask hot-spot-x hot-spot-y)
+  (define w (send image get-width))
+  (define h (send image get-height))
+  (define argb (make-bytes (* w h 4) 0))
+  (send image get-argb-pixels 0 0 w h argb)
+  (if mask
+      (send mask get-argb-pixels 0 0 w h argb #t)
+      (send image get-argb-pixels 0 0 w h argb #t))
+  (shim_cursor_create_from_argb argb w h hot-spot-x hot-spot-y))
+
 (define cursor-driver%
   (class object%
     (super-new)
-    (define/public (ok?)                                   #t)
-    (define/public (set-standard sym)                      (void))
-    (define/public (set-image image mask hx hy)            (void))
-    (define/public (get-handle)                            #f)))
+    (define handle #f)
+
+    (define/public (ok?) (and handle #t))
+
+    (define/public (set-standard sym)
+      (set! handle
+            (case sym
+              [(bullseye)
+               (image->argb-handle (make-cursor-image draw-bullseye 'unsmoothed) #f 8 8)]
+              [(arrow cross hand ibeam watch blank
+                size-n/s size-e/w size-ne/sw size-nw/se arrow+watch)
+               (shim_cursor_create_standard (symbol->string sym))]
+              [else #f])))
+
+    (define/public (set-image image mask hot-spot-x hot-spot-y)
+      (set! handle (image->argb-handle image mask hot-spot-x hot-spot-y)))
+
+    (define/public (get-handle) handle)))
 
 ; ---- function stubs -------------------------------------------------------
 

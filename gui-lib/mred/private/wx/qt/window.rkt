@@ -18,6 +18,7 @@
 (require racket/class
          "../common/queue.rkt"
          "../common/event.rkt"
+         "../common/local.rkt"
          "utils.rkt")
 
 (provide window%
@@ -174,7 +175,18 @@
     ; (frame%, button%, make-stub-class controls) since canvas/panel don't need them
     (define/public (skip-enter-leave-events skip?) (void))
     (define/public (set-event-positions-wrt c) (void))
-    (define/public (set-cursor c)        (void))
+    ; QWidget::setCursor()/unsetCursor() already cascade to child widgets that
+    ; haven't set their own cursor and restore automatically on mouse leave --
+    ; unlike win32/gtk (docs/HACKING.md's window%/set-cursor precedent), Qt's
+    ; native widget tree does this bookkeeping itself, so no mouse-in?/
+    ; reset-cursor-in-child-style manual cascade is needed here. `reset-cursor`
+    ; stays a no-op: nothing in shared code calls it on this backend (it's a
+    ; win32/gtk-internal helper, not part of the wx/common contract).
+    (define/public (set-cursor c)
+      (when handle
+        (if c
+            (shim_widget_set_cursor handle (send (send c get-driver) get-handle))
+            (shim_widget_unset_cursor handle))))
     (define/public (reset-cursor default) (void))
     (define/public (get-dialog-level) 0)
     (define/public (frame-relative-dialog-status win) #f)
