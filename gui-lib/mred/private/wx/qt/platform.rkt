@@ -25,6 +25,7 @@
          "menu-item.rkt"
          "message.rkt"
          "filedialog.rkt"
+         "printer-dc.rkt"
          "queue.rkt"
          "utils.rkt")
 
@@ -100,33 +101,7 @@
 ; list-box% is the real implementation (list-box.rkt); imported above
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above
 ; message% is the real implementation (message.rkt); imported above
-; printer-dc% must NOT extend window% — it's a DC class.
-; doc+page-check-mixin (racket/draw/private/page-dc) applies define/override to
-; start-doc/end-doc/start-page/end-page and all draw methods.
-; We extend bitmap-dc% which provides all those as real methods; gdi.rkt wraps us.
-(define printer-dc%
-  (class object%
-    (init [parent #f])
-    (super-new)
-    (define/public (start-doc s)       #f)
-    (define/public (end-doc)           (void))
-    (define/public (start-page)        (void))
-    (define/public (end-page)          (void))
-    (define/public (draw-bitmap bm dx dy [s 'solid] [c #f] [m #f]) #f)
-    (define/public (draw-bitmap-section bm dx dy sx sy sw sh [s 'solid] [c #f] [m #f]) #f)
-    (define/public (draw-polygon pts [x 0] [y 0] [fill 'odd-even]) (void))
-    (define/public (draw-lines pts [x 0] [y 0]) (void))
-    (define/public (draw-path p [x 0] [y 0] [fill 'odd-even]) (void))
-    (define/public (draw-ellipse x y w h) (void))
-    (define/public (draw-arc x y w h s e) (void))
-    (define/public (draw-text t x y [c? #f] [offset 0] [angle 0.0]) (void))
-    (define/public (draw-spline x1 y1 x2 y2 x3 y3) (void))
-    (define/public (draw-rounded-rectangle x y w h [r -0.25]) (void))
-    (define/public (draw-rectangle x y w h) (void))
-    (define/public (draw-point x y) (void))
-    (define/public (draw-line x1 y1 x2 y2) (void))
-    (define/public (clear) (void))
-    (define/public (erase) (void))))
+; printer-dc% is the real implementation (printer-dc.rkt); imported above
 ; radio-box% is the real implementation (radio-box.rkt); imported above
 ; slider% is the real implementation (slider.rkt); imported above
 ; tab-panel% is the real implementation (tab-panel.rkt); imported above
@@ -234,8 +209,8 @@
 
 ; ---- function stubs -------------------------------------------------------
 
-(define (can-show-print-setup?)          #f)
-(define (show-print-setup parent)        #f)
+; can-show-print-setup?/show-print-setup: real implementations
+; (printer-dc.rkt); imported above.
 ; id is `this` from platform menu-item%'s (id) method, i.e. the wx-level
 ; glue instance itself (mirrors gtk's `(define (id-to-menu-item i) i)`,
 ; wx/gtk/procs.rkt). wxtop.rkt's on-menu-command applies the generic

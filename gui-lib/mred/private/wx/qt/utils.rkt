@@ -104,6 +104,17 @@
          shim_radio_box_enable_button
          shim_radio_box_button_focus
          shim_file_dialog_create
+         shim_printer_show_print_dialog
+         shim_printer_show_page_setup_dialog
+         shim_printer_create
+         shim_printer_destroy
+         shim_printer_set_page_setup
+         shim_printer_get_page_setup
+         shim_printer_set_output_pdf
+         shim_printer_begin_job
+         shim_printer_draw_page
+         shim_printer_new_page
+         shim_printer_end_job
          shim_tab_panel_create
          shim_tab_panel_get_tabbar_widget
          shim_tab_panel_get_content_widget
@@ -131,7 +142,8 @@
          _focus_cb_t
          _wheel_cb_t
          _resize_cb_t
-         _file_dialog_cb_t)
+         _file_dialog_cb_t
+         _printer_dialog_cb_t)
 
 ; Locate the shim library.
 ; Path from this file: 7 levels up = project root, then qt-shim/build/<preset>/
@@ -184,6 +196,10 @@
 ; _string/utf-8's coretype (bytes) can't be wrapped in _or-null).
 (define _file_dialog_cb_t
   (_fun #:atomic? #t _pointer _pointer -> _void))
+
+; Printer/page-setup dialog result callback: ud, accepted (1=QDialog::Accepted).
+(define _printer_dialog_cb_t
+  (_fun #:atomic? #t _pointer _int -> _void))
 
 (define shim_version
   (get-ffi-obj "shim_version" shim-lib (_fun -> _string)))
@@ -637,6 +653,53 @@
                (_fun _pointer _int _string/utf-8 _string/utf-8 _string/utf-8
                      _string/utf-8 _string/utf-8 _pointer _pointer
                      -> _void)))
+
+; ---- printer (printer-dc% / show-print-setup) --------------------------
+; `cb' is _pointer, not _printer_dialog_cb_t, for the same reason as the file
+; dialog above: printer-dc.rkt builds one persistent trampoline via
+; (function-ptr ... _printer_dialog_cb_t) at module load, keyed by an integer
+; id cast through `ud' -- never a fresh callback per call (docs/HACKING.md §19).
+(define shim_printer_show_print_dialog
+  (get-ffi-obj "shim_printer_show_print_dialog" shim-lib
+               (_fun _pointer _pointer _pointer _pointer -> _void)))
+
+(define shim_printer_show_page_setup_dialog
+  (get-ffi-obj "shim_printer_show_page_setup_dialog" shim-lib
+               (_fun _pointer _pointer _pointer _pointer -> _void)))
+
+(define shim_printer_create
+  (get-ffi-obj "shim_printer_create" shim-lib (_fun -> _pointer)))
+
+(define shim_printer_destroy
+  (get-ffi-obj "shim_printer_destroy" shim-lib (_fun _pointer -> _void)))
+
+(define shim_printer_set_page_setup
+  (get-ffi-obj "shim_printer_set_page_setup" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_printer_get_page_setup
+  (get-ffi-obj "shim_printer_get_page_setup" shim-lib
+               (_fun _pointer (out-landscape : (_ptr o _int))
+                     -> (id : _int)
+                     -> (values id out-landscape))))
+
+(define shim_printer_set_output_pdf
+  (get-ffi-obj "shim_printer_set_output_pdf" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_printer_begin_job
+  (get-ffi-obj "shim_printer_begin_job" shim-lib
+               (_fun _pointer _string/utf-8 -> _pointer)))
+
+(define shim_printer_draw_page
+  (get-ffi-obj "shim_printer_draw_page" shim-lib
+               (_fun _pointer _pointer _bytes _int _int _int -> _void)))
+
+(define shim_printer_new_page
+  (get-ffi-obj "shim_printer_new_page" shim-lib (_fun _pointer -> _int)))
+
+(define shim_printer_end_job
+  (get-ffi-obj "shim_printer_end_job" shim-lib (_fun _pointer -> _void)))
 
 ; ---- tab-panel (tab-panel%) --------------------------------------------
 
