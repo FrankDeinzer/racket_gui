@@ -252,12 +252,24 @@
 (define (hide-cursor)                    (void))
 (define (bell)                           (void))
 (define (flush-display)                  (void))
-; ⚑ FLAG: no shim query for the real global cursor position/button-state yet
-; (gtk/win32/cocoa call into their native APIs). Stubbed at (0,0)/no-buttons
-; with the correct 0-arg/2-values contract so callers don't crash; revisit
-; if real position is needed (e.g. context-menu placement).
+; QCursor::pos() + QGuiApplication::mouseButtons()/queryKeyboardModifiers() are
+; already portable across all three platforms (unlike win32's own procs.rkt,
+; which has no cross-platform notion of 'middle/'meta and skips them) -- only
+; caps-lock has no Qt-level query and stays Windows-specific in the shim
+; (shim_get_mouse_state's #ifdef _WIN32), matching win32's own GetAsyncKeyState
+; check exactly since this backend also runs on Windows.
 (define (get-current-mouse-state)
-  (values (make-object point% 0 0) '()))
+  (define-values (x y flags) (shim_get_mouse_state))
+  (define (maybe bit sym) (if (zero? (bitwise-and flags bit)) '() (list sym)))
+  (values (make-object point% x y)
+          (append (maybe #x01 'left)
+                  (maybe #x02 'middle)
+                  (maybe #x04 'right)
+                  (maybe #x08 'shift)
+                  (maybe #x10 'control)
+                  (maybe #x20 'alt)
+                  (maybe #x40 'meta)
+                  (maybe #x80 'caps))))
 (define (cancel-quit)                    (void))
 (define (get-control-font-face)          "Arial")
 (define (get-control-font-size)          11)

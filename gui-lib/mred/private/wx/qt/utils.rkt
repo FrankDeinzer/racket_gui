@@ -124,6 +124,7 @@
          shim_cursor_create_from_argb
          shim_widget_set_cursor
          shim_widget_unset_cursor
+         shim_get_mouse_state
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -725,3 +726,11 @@
 (define shim_widget_unset_cursor
   (get-ffi-obj "shim_widget_unset_cursor" shim-lib
                (_fun _pointer -> _void)))
+
+; ---- input state (get-current-mouse-state) --------------------------------
+
+(define shim_get_mouse_state
+  (get-ffi-obj "shim_get_mouse_state" shim-lib
+               (_fun (out-x : (_ptr o _int)) (out-y : (_ptr o _int)) (out-flags : (_ptr o _int))
+                     -> _void
+                     -> (values out-x out-y out-flags))))
