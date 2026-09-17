@@ -14,6 +14,7 @@
          "choice.rkt"
          "radio-box.rkt"
          "slider.rkt"
+         "gauge.rkt"
          "tab-panel.rkt"
          "group-panel.rkt"
          "dialog.rkt"
@@ -94,18 +95,7 @@
 ; check-box% is the real implementation (check-box.rkt); imported above
 ; choice% is the real implementation (choice.rkt); imported above
 ; dialog% is the real implementation (dialog.rkt); imported above
-; gauge%: non-erroring stub (visual-only progress bar, e.g. DrRacket splash)
-(define gauge%
-  (class window%
-    (init-rest args)
-    (define the-parent (if (pair? args) (car args) #f))
-    (super-new [handle #f] [parent the-parent])
-    (define range 100)
-    (define value 0)
-    (define/public (get-range)   range)
-    (define/public (set-range r) (set! range r))
-    (define/public (get-value)   value)
-    (define/public (set-value v) (set! value v))))
+; gauge% is the real implementation (gauge.rkt); imported above
 ; group-panel% is the real implementation (group-panel.rkt); imported above
 ; list-box% is the real implementation (list-box.rkt); imported above
 ; menu%, menu-bar%, menu-item% are real implementations (menu*.rkt); imported above

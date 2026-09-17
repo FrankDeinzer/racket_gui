@@ -81,6 +81,11 @@
          shim_slider_create
          shim_slider_set_value
          shim_slider_get_value
+         shim_gauge_create
+         shim_gauge_set_range
+         shim_gauge_get_range
+         shim_gauge_set_value
+         shim_gauge_get_value
          shim_scrollbar_create
          shim_scrollbar_set_range
          shim_scrollbar_set_value
@@ -511,6 +516,28 @@
 
 (define shim_slider_get_value
   (get-ffi-obj "shim_slider_get_value" shim-lib
+               (_fun _pointer -> _int)))
+
+; ---- gauge (gauge%) ---------------------------------------------------------
+
+(define shim_gauge_create
+  (get-ffi-obj "shim_gauge_create" shim-lib
+               (_fun _pointer _int _int _int -> _pointer)))
+
+(define shim_gauge_set_range
+  (get-ffi-obj "shim_gauge_set_range" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_gauge_get_range
+  (get-ffi-obj "shim_gauge_get_range" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_gauge_set_value
+  (get-ffi-obj "shim_gauge_set_value" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_gauge_get_value
+  (get-ffi-obj "shim_gauge_get_value" shim-lib
                (_fun _pointer -> _int)))
 
 ; ---- scrollbar (canvas% do-set-scrollbars / manual scroll API) -------------
