@@ -11,6 +11,35 @@
          display-count
          display-bitmap-resolution)
 
+; ---- macOS root-menu-bar tracking (docs/HACKING.md §46/§47) -------------
+; mrtop.rkt creates one hidden "Root" frame per eventspace whenever
+; `current-eventspace-has-menu-root?` holds (any macOS backend, cocoa
+; included) and calls `designate-root-frame` on it; DrRacket then attaches
+; its own reduced File/Help menu bar to it via `(new menu-bar% (parent
+; 'root))` (mrmenu.rkt) -- exactly the same `set-menu-bar` call any real
+; frame gets. cocoa only ever *shows* a frame's menu bar when that frame is
+; the active/main window (or, for the root frame, when no other window is
+; front) -- wx/cocoa/frame.rkt's windowDidResignMain: swaps to the root's
+; (or an empty) bar the instant the last real window loses "main" status.
+; Qt's `set-menu-bar` had no equivalent: it always attached the bar to its
+; owning QMainWindow via shim_window_set_menubar, which for the never-shown
+; Root frame meant the bar was reparented into an invisible window and could
+; never become the system-visible one. Fix: keep the root frame's QMenuBar*
+; parentless (as shim_menubar_create already creates it) and toggle its own
+; visibility directly via the existing generic shim_widget_set_visible,
+; based on whether any real (non-root) frame is currently shown -- no new
+; Shim ABI needed.
+(define root-frame #f)
+(define root-menubar-handle #f)
+(define shown-real-frames (make-hasheq))
+
+; Called from every real frame's direct-show (root-frame's own direct-show
+; with on?=#t is never invoked -- mrtop.rkt never shows it, matching cocoa).
+(define (update-root-menubar-visibility!)
+  (when root-menubar-handle
+    (shim_widget_set_visible root-menubar-handle
+                              (if (zero? (hash-count shown-real-frames)) 1 0))))
+
 (define frame%
   (class window%
     (init parent           ; platform parent frame or #f
@@ -62,7 +91,14 @@
     (define/public (direct-show on?)
       (register-frame-shown this on?)
       (super show on?)
-      (shim_window_show qt-handle (if on? 1 0)))
+      (shim_window_show qt-handle (if on? 1 0))
+      ; root-frame's own direct-show #t is never called (mrtop.rkt never
+      ; shows it) -- this branch only ever runs for real frames/dialogs.
+      (unless (eq? this root-frame)
+        (if on?
+            (hash-set! shown-real-frames this #t)
+            (hash-remove! shown-real-frames this))
+        (update-root-menubar-visibility!)))
 
     (define/override (show on?)
       (direct-show on?))
@@ -166,13 +202,22 @@
       (let ([wb (box 0)] [hb (box 0)])
         (send this get-client-size wb hb)
         (values (unbox wb) (unbox hb))))
-    ; Attaches a QMenuBar to this QMainWindow.
+    ; Attaches a QMenuBar to this QMainWindow -- except for the root frame
+    ; (docs/HACKING.md §46/§47), whose bar stays parentless and is only
+    ; toggled visible/invisible directly (update-root-menubar-visibility!),
+    ; since shim_window_set_menubar would reparent it into a QMainWindow
+    ; that's never shown, permanently hiding it from the system menu bar.
     ; mb is wx-menu-bar% (glue extends platform menu-bar%).
     (define menubar-handle #f)
     (define/override (set-menu-bar mb)
       (when mb
-        (set! menubar-handle (send mb get-menubar-handle))
-        (shim_window_set_menubar qt-handle menubar-handle)
+        (define handle (send mb get-menubar-handle))
+        (set! menubar-handle handle)
+        (if (eq? this root-frame)
+            (begin
+              (set! root-menubar-handle handle)
+              (update-root-menubar-visibility!))
+            (shim_window_set_menubar qt-handle handle))
         (send mb set-frame this)))
 
     ; The QMenuBar lives inside the QMainWindow, so it consumes client height
@@ -216,9 +261,11 @@
         (set! modal-enabled? on?)
         (shim_widget_set_enabled qt-handle (if on? 1 0))))
 
-    ; Called by mrtop.rkt on the first frame; cocoa uses it to set the app delegate,
-    ; gtk/win32 are no-ops.  Qt needs no special treatment here.
-    (define/public (designate-root-frame) (void))
+    ; Called by mrtop.rkt on the hidden per-eventspace helper frame whenever
+    ; current-eventspace-has-menu-root? holds (any macOS backend). Recorded
+    ; so set-menu-bar/direct-show (above) can special-case it -- see the
+    ; module-level comment near root-frame (docs/HACKING.md §46/§47).
+    (define/public (designate-root-frame) (set! root-frame this))
 
     ; Sizing helpers used by make-top-container%
     (define/public (min-width)  0)
