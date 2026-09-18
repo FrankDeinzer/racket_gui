@@ -18,7 +18,20 @@
   (set-check-queue! (lambda () (not (zero? (shim_events_pending)))))
   ; Wakeup hook: on Windows the scheduler calls this when it would
   ; block; pumping 0 ms processes any immediately-ready events.
-  (set-queue-wakeup! (lambda (fds) (atomically (shim_pump 0)))))
+  (set-queue-wakeup! (lambda (fds) (atomically (shim_pump 0))))
+  ; `(exit)` calls the C library's exit(), which runs QtCore/QtGui's own
+  ; static-destructor chain via __cxa_finalize_ranges -- but nothing ever
+  ; destroyed the QApplication first (shim_app_quit existed but had no
+  ; caller). Without an orderly QApplication teardown, that static
+  ; destruction order was never exercised/intended by Qt and crashes with
+  ; a garbage `this` inside a QtGui virtual call once any lazily-loaded
+  ; Qt subsystem (observed with the print-support platform plugin, only
+  ; loaded on the first QPrintDialog/QPageSetupDialog) has registered its
+  ; own globals -- macOS-observed, docs/HACKING.md §49.4/§50. A plumber
+  ; flush runs synchronously inside `exit`, on the same thread, before the
+  ; process actually terminates -- exactly the hook needed to give
+  ; QApplication's destructor a chance to run first.
+  (plumber-add-flush! (current-plumber) (lambda (handle) (shim_app_quit))))
 
 (define (qt-start-event-pump)
   (unless pump-started?
