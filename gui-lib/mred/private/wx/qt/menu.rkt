@@ -80,6 +80,36 @@
       (define after  (drop items-in-order (+ pos 1)))
       (set! items-in-order (list-append before after)))
 
+    ; ---- Cocoa menu-bar quirk workaround -------------------------------------
+    ; Qt's native macOS menu bar omits any top-level QMenu that has zero
+    ; QActions at the moment it's synced into the NSMenu -- and with no
+    ; menu-bar slot, the item can never be clicked, so `about-to-show-cb`
+    ; above never fires either. That's a real deadlock for a menu populated
+    ; lazily via demand-callback (framework's Windows/Tabs menu, see
+    ; `group.rkt`'s `create-windows-menu`, always empty until opened) --
+    ; confirmed via an isolated probe: an empty demand-callback-only menu
+    ; never appears in `osascript`'s menu-bar-item enumeration at all.
+    ; win32/gtk/cocoa render an empty top-level menu without issue. Fix:
+    ; keep a hidden placeholder action whenever this menu would otherwise be
+    ; truly empty at the Qt level, so it always carries >=1 native QAction.
+    ; A separator does NOT work here -- measured: Qt's emptiness check for
+    ; menu-bar sync ignores separators, so a separator-only menu is still
+    ; treated as empty and stays omitted; a plain (blank-label, disabled)
+    ; QAction does count. Kept out of item-table/items-in-order so
+    ; `number`/delete-by-position keep reflecting only the logical
+    ; (wx-level) item count.
+    (define placeholder-action #f)
+    (define (ensure-placeholder!)
+      (unless placeholder-action
+        (define a (shim_action_create qt-menu "" 0 #f #f))
+        (shim_action_set_enabled a 0)
+        (set! placeholder-action a)))
+    (define (drop-placeholder!)
+      (when placeholder-action
+        (shim_menu_remove_action qt-menu placeholder-action)
+        (set! placeholder-action #f)))
+    (ensure-placeholder!)
+
     ; ---- top-frame resolution -----------------------------------------------
     (define (find-top-frame)
       (let loop ([p the-parent])
@@ -94,6 +124,7 @@
     ; help-or-sub : platform menu% if submenu, string/false otherwise
     ; checkable? : boolean
     (define/public (append id label help-or-sub checkable?)
+      (drop-placeholder!)
       (define action
         (if (and help-or-sub (object? help-or-sub))
             ; submenu — help-or-sub is platform menu% (or glue extending it)
@@ -113,6 +144,7 @@
 
     ; ---- append-separator ---------------------------------------------------
     (define/public (append-separator)
+      (drop-placeholder!)
       (define sep-action (shim_menu_add_separator qt-menu))
       (order-push! #f sep-action))
 
@@ -125,7 +157,8 @@
         (hash-remove! retained-callbacks id)
         (set! items-in-order
               (filter (lambda (p) (not (eq? (car p) id)))
-                      items-in-order))))
+                      items-in-order))
+        (when (null? items-in-order) (ensure-placeholder!))))
 
     ; ---- delete-by-position -------------------------------------------------
     (define/public (delete-by-position pos)
@@ -135,7 +168,8 @@
         (define action (cdr pair))
         (shim_menu_remove_action qt-menu action)
         (when id (hash-remove! item-table id) (hash-remove! retained-callbacks id))
-        (order-remove-at! pos)))
+        (order-remove-at! pos)
+        (when (null? items-in-order) (ensure-placeholder!))))
 
     ; ---- enable (override — window% has 1-arg version) ----------------------
     (define/override (enable id on?)
