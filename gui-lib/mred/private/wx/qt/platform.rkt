@@ -292,9 +292,12 @@
 ; ---- init Qt ---------------------------------------------------------------
 
 ; Called once when this module is first required (i.e. when platform-values
-; is called for the first time by wx/platform.rkt).
-(qt-init!)
-(qt-start-event-pump)
+; is called for the first time by wx/platform.rkt). Both calls return
+; non-void values (a plumber-flush-handle, a thread) -- void them out so the
+; module-instantiation printer (active for the "main" module in this
+; require chain) doesn't echo them to stdout on every Qt-backend startup.
+(void (qt-init!))
+(void (qt-start-event-pump))
 
 ; ---- platform-values -------------------------------------------------------
 
