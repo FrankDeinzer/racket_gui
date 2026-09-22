@@ -262,9 +262,21 @@
 (define (shortcut-visible-in-label? [? #f]) #t)
 (define (unregister-collecting-blit canvas) (void))
 (define (register-collecting-blit canvas x y w h on off ox oy fx fy) (void))
+; mred/private/mred.rkt's find-graphical-system-path wraps this with
+; `(or (wx:find-graphical-system-path what) (case what [(init-file) ...
+; ~/.gracketrc or gracketrc.rktl] [else #f]))` -- a real fallback that
+; computes the correct .gracketrc-family path. The previous `(init-file)`
+; case here returned `(find-system-path 'init-file)` (Racket's OWN init
+; file, e.g. ~/.racketrc) instead of #f, which is truthy and therefore
+; short-circuited that `or`, silently loading the wrong startup file under
+; this backend. Returning #f for 'init-file lets mred.rkt's fallback run,
+; matching both gtk (only handles 'x-display) and win32 (blanket #f).
 (define (find-graphical-system-path what)
   (case what
-    [(init-file) (find-system-path 'init-file)]
+    [(x-display)
+     (and (eq? (system-type) 'unix)
+          (getenv "DISPLAY")
+          (string->path (getenv "DISPLAY")))]
     [else #f]))
 (define (play-sound file async?) #f)
 (define (font-from-user-platform-mode)  #f)
