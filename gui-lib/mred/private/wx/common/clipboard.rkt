@@ -85,7 +85,7 @@
 
 (define the-clipboard (new clipboard% [x-selection? #f]))
 (define the-x-selection
-  (if has-x-selection?
+  (if (has-x-selection?)
       (new clipboard% [x-selection? #t])
       the-clipboard))
 
