@@ -1,7 +1,9 @@
 #lang racket/base
 ; Qt platform module — exports platform-values for Racket's GUI toolkit.
-; Spike implementation: frame%, canvas%, button%, check-box%, list-box% are
-; real; rest are stubs.
+; Most widget classes and platform functions are real Qt implementations by
+; this point (see docs/HACKING.md for the running inventory); remaining
+; stubs are documented per-item in docs/2026-09-22_report-linux.md's Phase 1
+; table.
 (require racket/class
          racket/draw
          "../../lock.rkt"
@@ -31,65 +33,6 @@
          "utils.rkt")
 
 (provide (protect-out platform-values))
-
-; ---- stub class factory ---------------------------------------------------
-; Stub classes extend window% so the glue layers (wx-make-window%, make-item%)
-; can inherit is-shown-to-root?, is-enabled-to-root?, etc.
-(define (make-stub-class name)
-  (class window%
-    (init-rest args)
-    (define the-parent (if (pair? args) (car args) #f))
-    (super-new [handle #f] [parent the-parent])
-    ; Widget interface stubs so glue layers can `inherit` them:
-    (define/public (command e)       (void))
-    (define/public (set-border on?)  (void))
-    (define/public (set-value v)     (void))
-    (define/public (get-value)       #f)
-    ; variadic: button-style callers pass (label); other stub consumers may
-    ; pass (index label) -- mirrors `append`'s rest-arg treatment above.
-    (define/public (set-label . args) (void))
-    (define/public (get-label)        "")
-    (define/public (set-selection i) (void))
-    (define/public (get-selection)   -1)
-    (define/public (clear)           (void))
-    (define/public (append . args)   (void))
-    (define/public (defaulting on?)  (void))
-    (define/public (has-border?)     #f)
-    (define/public (on-choice-reorder new-positions) (void))
-    (define/public (on-choice-close pos)             (void))
-    ; list-box specific methods inherited by wx-internal-list-box%
-    (define/public (get-first-item)         0)
-    (define/public (set-first-visible-item i) (void))
-    (define/public (number-of-visible-items) 0)
-    ; radio-box/choice/list-box: item count
-    (define/public (number)                  0)
-    ; gauge
-    (define/public (set-gauge-value v)       (void))
-    (define/public (get-gauge-value)         0)
-    ; slider
-    (define/public (set-slider-value v)      (void))
-    (define/public (get-slider-value)        0)
-    ; button-focus for radio-box/tab-panel
-    (define/public (button-focus i)          -1)
-    ; char-to: NOT here — added by wx-make-window% (wxwindow.rkt) via public*
-    ; label setting for controls (button-style set-label)
-    (define/public (set-item n label)        (void))
-    (define/public (get-item-label n)        "")
-    ; canvas group-panel
-    (define/public (adopt-child c)           (void))
-    (define/public (get-label-position)      'horizontal)
-    (define/public (set-label-position pos)  (void))
-    (define/public (set-item-cursor x y)     (void))
-    ; menu-related methods (needed by wx-menu-bar% and wx-menu% glue)
-    (define/public (delete label pos)                (void))
-    (define/public (delete-by-position pos)          (void))
-    ; append is already defined above (as (append s)) — redefine as case-lambda
-    ; to support both (append s) and (append menu title) arities
-    (define/public (enable-top pos on?)              (void))
-    ; on-combo-select: expected by wxtextfield.rkt via override* on combo controls
-    (define/public (on-combo-select i)               (void))
-    ; set-callback: mrpanel.rkt sends this to the tab widget (get-tab-widget)
-    (define/public (set-callback cb)                 (void))))
 
 ; ---- unimplemented stubs ---------------------------------------------------
 
