@@ -133,6 +133,10 @@
          shim_clipboard_get_text
          shim_clipboard_has_text
          shim_clipboard_supports_selection
+         shim_clipboard_set_image
+         shim_clipboard_has_image
+         shim_clipboard_image_size
+         shim_clipboard_get_image_argb
          shim_control_font_face
          shim_control_font_size
          shim_double_click_time
@@ -790,6 +794,28 @@
 (define shim_clipboard_supports_selection
   (get-ffi-obj "shim_clipboard_supports_selection" shim-lib
                (_fun -> _bool)))
+
+; ---- clipboard: bitmap ---------------------------------------------------
+; Always QClipboard::Clipboard (no mode parameter -- see shim.cpp comment).
+
+(define shim_clipboard_set_image
+  (get-ffi-obj "shim_clipboard_set_image" shim-lib
+               (_fun _bytes _int _int -> _void)))
+(define shim_clipboard_has_image
+  (get-ffi-obj "shim_clipboard_has_image" shim-lib
+               (_fun -> _bool)))
+(define shim_clipboard_image_size
+  (get-ffi-obj "shim_clipboard_image_size" shim-lib
+               (_fun (out-w : (_ptr o _int))
+                     (out-h : (_ptr o _int))
+                     -> (ok : _int)
+                     -> (if (zero? ok) (values #f #f) (values out-w out-h)))))
+; w/h must be the sizes shim_clipboard_image_size just returned -- the shim
+; clamps its copy to them (defends against the clipboard changing between
+; the size query and this call; see shim.cpp comment).
+(define shim_clipboard_get_image_argb
+  (get-ffi-obj "shim_clipboard_get_image_argb" shim-lib
+               (_fun _bytes _int _int -> _void)))
 
 ; ---- control font -------------------------------------------------------
 

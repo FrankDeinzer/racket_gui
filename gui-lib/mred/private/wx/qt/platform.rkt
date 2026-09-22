@@ -172,10 +172,43 @@
 
     (define/public (get-text-data) (or (native-text) ""))
 
-    ; Bitmap clipboard is out of scope for this spike (never worked before
-    ; either -- the old stub had no methods for it at all).
-    (define/public (get-bitmap-data)         #f)
-    (define/public (set-bitmap-data bm time) (void))))
+    ; Bitmap clipboard -- always QClipboard::Clipboard (shim.cpp: no
+    ; Selection-mode consumer for bitmaps in wx/common/clipboard.rkt, so no
+    ; mode param threading here unlike the text functions above).
+    ;
+    ; Byte convention throughout: racket/draw's bitmap%get-argb-pixels/
+    ; set-argb-pixels, tightly packed, (A,R,G,B) per pixel, matching the
+    ; existing shim_canvas_blit_argb/shim_cursor_create_from_argb precedent.
+    ;
+    ; Write direction (set-bitmap-data) requests *premultiplied* pixels
+    ; (pre-mult?=#t) -- same choice canvas.rkt's blit_argb caller makes --
+    ; because shim_clipboard_set_image builds a
+    ; QImage::Format_ARGB32_Premultiplied the same way shim_canvas_blit_argb
+    ; does, so the buffer must already be premultiplied going in.
+    (define/public (set-bitmap-data bm time)
+      (define w (send bm get-width))
+      (define h (send bm get-height))
+      (define buf (make-bytes (* w h 4)))
+      (send bm get-argb-pixels 0 0 w h buf #f #t)
+      (shim_clipboard_set_image buf w h))
+
+    ; Read direction (get-bitmap-data): shim_clipboard_get_image_argb
+    ; converts the clipboard QImage to Qt's *non*-premultiplied
+    ; Format_ARGB32 before packing bytes (Qt does the un-premultiplication,
+    ; not this code), so set-argb-pixels is called with its default
+    ; pre-mult?=#f (straight alpha) to match.
+    (define/public (get-bitmap-data)
+      (define-values (w h) (shim_clipboard_image_size))
+      (and w h (positive? w) (positive? h)
+           (let* ([buf (make-bytes (* w h 4))]
+                  ; with-alpha?=#t: clipboard images (e.g. 2htdp/image icons)
+                  ; may carry real transparency; a bitmap% created without an
+                  ; alpha channel would silently discard it (get/set-argb-
+                  ; pixels ignore alpha data when alpha-channel? is #f).
+                  [bm  (make-object bitmap% w h #f #t)])
+             (shim_clipboard_get_image_argb buf w h)
+             (send bm set-argb-pixels 0 0 w h buf)
+             bm)))))
 
 ; QCursor supports true ARGB images directly, so unlike win32's AND/XOR-mask
 ; HCURSOR dance, a custom cursor here is just "turn a bitmap%+mask into an
