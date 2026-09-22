@@ -310,7 +310,7 @@
 ; GSetting; win32 also hardcodes 500 here (Phase 1 audit), so this Qt query
 ; upgrades Linux beyond gtk-parity's own baseline, not just win32's.
 (define (get-double-click-time)          (shim_double_click_time))
-(define (location->window x y)          #f)
+; location->window: real implementation (frame.rkt); imported above.
 (define (shortcut-visible-in-label? [? #f]) #t)
 (define (unregister-collecting-blit canvas) (void))
 (define (register-collecting-blit canvas x y w h on off ox oy fx fy) (void))

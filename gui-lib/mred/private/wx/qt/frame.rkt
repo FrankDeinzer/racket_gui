@@ -9,7 +9,8 @@
          display-size
          display-origin
          display-count
-         display-bitmap-resolution)
+         display-bitmap-resolution
+         location->window)
 
 ; ---- macOS root-menu-bar tracking (docs/HACKING.md §46/§47) -------------
 ; mrtop.rkt creates one hidden "Root" frame per eventspace whenever
@@ -32,6 +33,12 @@
 (define root-frame #f)
 (define root-menubar-handle #f)
 (define shown-real-frames (make-hasheq))
+
+;; used for location->window (mirrors wx/gtk/frame.rkt's all-frames registry
+;; -- no native "window at point" query is used, just a weak-hasheq of
+;; currently-shown frames, bracketed in direct-show below, and a bounding-box
+;; scan below the class).
+(define all-frames (make-weak-hasheq))
 
 ; Called from every real frame's direct-show (root-frame's own direct-show
 ; with on?=#t is never invoked -- mrtop.rkt never shows it, matching cocoa).
@@ -89,6 +96,9 @@
     ; ---- platform interface (called by wxtop.rkt glue) ----
 
     (define/public (direct-show on?)
+      (if on?
+          (hash-set! all-frames this #t)
+          (hash-remove! all-frames this))
       (register-frame-shown this on?)
       (super show on?)
       (shim_window_show qt-handle (if on? 1 0))
@@ -271,6 +281,23 @@
     (define/public (min-width)  0)
     (define/public (min-height) 0)
     (define/override (queue-on-size) (void))))
+
+; ---- location->window ----------------------------------------------------
+; mred/private/mrtop.rkt:328 (send-message-to-window, a public mred-sig.rkt
+; API) resolves a screen point to a frame this way. No native Qt "window at
+; point" query -- just a bounding-box scan over all-frames, ported verbatim
+; from wx/gtk/frame.rkt's own location->window. Iteration order over a
+; weak-hasheq is unspecified, so overlapping frames resolve to whichever one
+; happens first -- same non-determinism gtk already has, not something to fix.
+(define (location->window x y)
+  (for/or ([f (in-hash-keys all-frames)])
+    (let ([fx (send f get-x)]
+          [fw (send f get-width)])
+      (and (<= fx x (+ fx fw))
+           (let ([fy (send f get-y)]
+                 [fh (send f get-height)])
+             (<= fy y (+ fy fh)))
+           f))))
 
 ; ---- display info stubs -------------------------------------------------
 
