@@ -131,15 +131,21 @@
 ; while an external-app copy falls back to plain text.
 (define clipboard-driver%
   (class object%
-    (init [x-selection? #f])
+    ; x-selection?: #t for the-x-selection (X11 PRIMARY, QClipboard::Selection),
+    ; #f for the-clipboard (QClipboard::Clipboard) -- wx/common/clipboard.rkt
+    ; instantiates this class twice, once with each flag (docs/HACKING.md,
+    ; Block C 2026-09-22 §2.6). mode is the corresponding shim_clipboard_*
+    ; int: 0 = Clipboard, 1 = Selection.
+    (init-field [x-selection? #f])
     (super-new)
 
+    (define mode (if x-selection? 1 0))
     (define client #f)
     (define client-types #f)
     (define last-set-text #f)
 
     (define (native-text)
-      (and (shim_clipboard_has_text) (shim_clipboard_get_text)))
+      (and (shim_clipboard_has_text mode) (shim_clipboard_get_text mode)))
 
     (define (client-owns-clipboard?)
       (and client (equal? (native-text) last-set-text)))
@@ -155,7 +161,7 @@
       (set! client c)
       (set! client-types orig-types)
       (set! last-set-text txt)
-      (when txt (shim_clipboard_set_text txt)))
+      (when txt (shim_clipboard_set_text txt mode)))
 
     (define/public (get-data fmt)
       (cond
@@ -224,7 +230,13 @@
 ; file-selector: real implementation (filedialog.rkt); imported above
 (define (is-color-display?)              #t)
 (define (get-display-depth)              32)
-(define (has-x-selection?)               #f)
+; QClipboard::supportsSelection() -- dynamic (X11: #t, Wayland/Windows/macOS:
+; #f), unlike gtk's hardcoded #t (X11-only backend) / win32's hardcoded #f
+; (no such concept). Was hardcoded #f here before, which is wrong on
+; Linux/X11 -- the actual load-bearing fix is clipboard-driver%'s mode
+; threading above, since wx/common/clipboard.rkt always constructs
+; the-x-selection regardless of this value (docs/HACKING.md §2.6).
+(define (has-x-selection?)               (shim_clipboard_supports_selection))
 (define (hide-cursor)                    (void))
 ; QApplication::beep() -- gtk calls gdk_display_beep(), win32 calls
 ; MessageBeep(MB_OK); was a no-op here before.

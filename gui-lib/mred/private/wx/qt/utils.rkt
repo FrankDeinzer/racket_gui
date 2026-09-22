@@ -132,6 +132,7 @@
          shim_clipboard_set_text
          shim_clipboard_get_text
          shim_clipboard_has_text
+         shim_clipboard_supports_selection
          shim_control_font_face
          shim_control_font_size
          shim_double_click_time
@@ -774,15 +775,20 @@
                (_fun -> _void)))
 
 ; ---- clipboard --------------------------------------------------------
+; mode: 0 = QClipboard::Clipboard, 1 = QClipboard::Selection (X11 PRIMARY).
+; Same three functions serve both the-clipboard and the-x-selection.
 
 (define shim_clipboard_set_text
   (get-ffi-obj "shim_clipboard_set_text" shim-lib
-               (_fun _string/utf-8 -> _void)))
+               (_fun _string/utf-8 _int -> _void)))
 (define shim_clipboard_get_text
   (get-ffi-obj "shim_clipboard_get_text" shim-lib
-               (_fun -> _string/utf-8)))
+               (_fun _int -> _string/utf-8)))
 (define shim_clipboard_has_text
   (get-ffi-obj "shim_clipboard_has_text" shim-lib
+               (_fun _int -> _bool)))
+(define shim_clipboard_supports_selection
+  (get-ffi-obj "shim_clipboard_supports_selection" shim-lib
                (_fun -> _bool)))
 
 ; ---- control font -------------------------------------------------------
