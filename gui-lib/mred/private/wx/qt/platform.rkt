@@ -259,7 +259,10 @@
 (define (control-font-size+in-pixels?)   (call-with-values shim_control_font_size cons))
 (define (get-control-font-size)          (car (control-font-size+in-pixels?)))
 (define (get-control-font-size-in-pixels?) (cdr (control-font-size+in-pixels?)))
-(define (get-double-click-time)          500)
+; QApplication::doubleClickInterval() -- gtk reads the live gtk-double-click-time
+; GSetting; win32 also hardcodes 500 here (Phase 1 audit), so this Qt query
+; upgrades Linux beyond gtk-parity's own baseline, not just win32's.
+(define (get-double-click-time)          (shim_double_click_time))
 (define (location->window x y)          #f)
 (define (shortcut-visible-in-label? [? #f]) #t)
 (define (unregister-collecting-blit canvas) (void))

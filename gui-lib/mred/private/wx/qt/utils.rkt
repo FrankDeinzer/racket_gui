@@ -134,6 +134,7 @@
          shim_clipboard_has_text
          shim_control_font_face
          shim_control_font_size
+         shim_double_click_time
          shim_cursor_create_standard
          shim_cursor_create_from_argb
          shim_widget_set_cursor
@@ -794,6 +795,12 @@
                (_fun (out-is-pixels : (_ptr o _int))
                      -> (size : _int)
                      -> (values size (not (zero? out-is-pixels))))))
+
+; ---- double-click time ----------------------------------------------------
+
+(define shim_double_click_time
+  (get-ffi-obj "shim_double_click_time" shim-lib
+               (_fun -> _int)))
 
 ; ---- cursor -------------------------------------------------------------
 
