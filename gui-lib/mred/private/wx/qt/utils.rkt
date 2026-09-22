@@ -131,6 +131,8 @@
          shim_clipboard_set_text
          shim_clipboard_get_text
          shim_clipboard_has_text
+         shim_control_font_face
+         shim_control_font_size
          shim_cursor_create_standard
          shim_cursor_create_from_argb
          shim_widget_set_cursor
@@ -774,6 +776,17 @@
 (define shim_clipboard_has_text
   (get-ffi-obj "shim_clipboard_has_text" shim-lib
                (_fun -> _bool)))
+
+; ---- control font -------------------------------------------------------
+
+(define shim_control_font_face
+  (get-ffi-obj "shim_control_font_face" shim-lib
+               (_fun -> _string/utf-8)))
+(define shim_control_font_size
+  (get-ffi-obj "shim_control_font_size" shim-lib
+               (_fun (out-is-pixels : (_ptr o _int))
+                     -> (size : _int)
+                     -> (values size (not (zero? out-is-pixels))))))
 
 ; ---- cursor -------------------------------------------------------------
 

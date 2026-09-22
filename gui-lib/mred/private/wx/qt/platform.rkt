@@ -246,9 +246,17 @@
                   (maybe #x40 'meta)
                   (maybe #x80 'caps))))
 (define (cancel-quit)                    (void))
-(define (get-control-font-face)          "Arial")
-(define (get-control-font-size)          11)
-(define (get-control-font-size-in-pixels?) #f)
+; QApplication::font(), resolved against the real font database (docs/HACKING.md,
+; Block C 2026-09-22) -- was a hardcoded "Arial"/11/#f before, which doesn't
+; exist as an installed family on most Linux systems and isn't the macOS
+; system UI font either.
+; Queried live (like gtk's GtkSettings read, not win32's cached theme font)
+; so a running process picks up a font/theme change; each dependent needs to
+; call this again for a consistent size, hence the local helper.
+(define (get-control-font-face)          (shim_control_font_face))
+(define (control-font-size+in-pixels?)   (call-with-values shim_control_font_size cons))
+(define (get-control-font-size)          (car (control-font-size+in-pixels?)))
+(define (get-control-font-size-in-pixels?) (cdr (control-font-size+in-pixels?)))
 (define (get-double-click-time)          500)
 (define (location->window x y)          #f)
 (define (shortcut-visible-in-label? [? #f]) #t)
