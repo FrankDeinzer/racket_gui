@@ -225,7 +225,9 @@
 (define (get-display-depth)              32)
 (define (has-x-selection?)               #f)
 (define (hide-cursor)                    (void))
-(define (bell)                           (void))
+; QApplication::beep() -- gtk calls gdk_display_beep(), win32 calls
+; MessageBeep(MB_OK); was a no-op here before.
+(define (bell)                           (shim_bell))
 (define (flush-display)                  (void))
 ; QCursor::pos() + QGuiApplication::mouseButtons()/queryKeyboardModifiers() are
 ; already portable across all three platforms (unlike win32's own procs.rkt,

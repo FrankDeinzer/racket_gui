@@ -128,6 +128,7 @@
          shim_group_panel_get_content_widget
          shim_group_panel_get_content_margins
          shim_group_panel_set_label
+         shim_bell
          shim_clipboard_set_text
          shim_clipboard_get_text
          shim_clipboard_has_text
@@ -764,6 +765,12 @@
 (define shim_group_panel_set_label
   (get-ffi-obj "shim_group_panel_set_label" shim-lib
                (_fun _pointer _string/utf-8 -> _void)))
+
+; ---- bell -----------------------------------------------------------------
+
+(define shim_bell
+  (get-ffi-obj "shim_bell" shim-lib
+               (_fun -> _void)))
 
 ; ---- clipboard --------------------------------------------------------
 
