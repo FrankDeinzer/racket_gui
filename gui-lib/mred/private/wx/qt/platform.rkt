@@ -4,6 +4,7 @@
 ; real; rest are stubs.
 (require racket/class
          racket/draw
+         "../../lock.rkt"
          "../common/default-procs.rkt"
          "../common/cursor-draw.rkt"
          "frame.rkt"
@@ -228,7 +229,6 @@
 ; QApplication::beep() -- gtk calls gdk_display_beep(), win32 calls
 ; MessageBeep(MB_OK); was a no-op here before.
 (define (bell)                           (shim_bell))
-(define (flush-display)                  (void))
 ; QCursor::pos() + QGuiApplication::mouseButtons()/queryKeyboardModifiers() are
 ; already portable across all three platforms (unlike win32's own procs.rkt,
 ; which has no cross-platform notion of 'middle/'meta and skips them) -- only
@@ -253,8 +253,10 @@
 ; exist as an installed family on most Linux systems and isn't the macOS
 ; system UI font either.
 ; Queried live (like gtk's GtkSettings read, not win32's cached theme font)
-; so a running process picks up a font/theme change; each dependent needs to
-; call this again for a consistent size, hence the local helper.
+; on each call, matching gtk/win32's own per-call contract -- though
+; gdi.rkt:89 snapshots the result into normal-control-font once at module
+; load, so nothing downstream currently re-reads it during a running
+; process; this only matters for other/future direct callers.
 (define (get-control-font-face)          (shim_control_font_face))
 (define (control-font-size+in-pixels?)   (call-with-values shim_control_font_size cons))
 (define (get-control-font-size)          (car (control-font-size+in-pixels?)))
@@ -267,6 +269,24 @@
 (define (shortcut-visible-in-label? [? #f]) #t)
 (define (unregister-collecting-blit canvas) (void))
 (define (register-collecting-blit canvas x y w h on off ox oy fx fy) (void))
+; gtk's flush-display is `pre-event-sync` (its own, Qt-foreign event-pump
+; primitive, common/queue.rkt) followed by gdk_display_flush (a pure X11
+; protocol flush, no event dispatch). Qt has no exposed "push queued draws,
+; dispatch nothing" primitive in this shim, so the architecturally sanctioned
+; equivalent is `shim_pump(0)` -- NOT QApplication::processEvents() called
+; directly (that would be the nested loop Regel 1 forbids), but the exact
+; same (atomically (shim_pump 0)) call already used in queue.rkt's
+; set-queue-wakeup!/qt-start-event-pump and filedialog.rkt (docs/HACKING.md
+; §39). This is safe from re-entrant nesting because C-to-Racket callbacks
+; here only ever post events and return (Regel 2) -- no Racket-level
+; consumer code (like flush-display's own caller) ever runs synchronously
+; inside a shim_pump call's C stack, and Racket's green threads are
+; cooperatively scheduled on one OS thread, serialized further by
+; `atomically`, so two shim_pump calls can never be concurrently in flight.
+; Caveat: unlike gdk_display_flush, this also dispatches pending input
+; events, not just a protocol flush -- narrow known consumer (framework/
+; splash.rkt's splash-screen animation) makes that an acceptable difference.
+(define (flush-display)                  (atomically (shim_pump 0)))
 ; mred/private/mred.rkt's find-graphical-system-path wraps this with
 ; `(or (wx:find-graphical-system-path what) (case what [(init-file) ...
 ; ~/.gracketrc or gracketrc.rktl] [else #f]))` -- a real fallback that
