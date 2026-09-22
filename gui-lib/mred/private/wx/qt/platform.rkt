@@ -255,8 +255,16 @@
 (define (get-double-click-time)          (shim_double_click_time))
 ; location->window: real implementation (frame.rkt); imported above.
 (define (shortcut-visible-in-label? [? #f]) #t)
-(define (unregister-collecting-blit canvas) (void))
-(define (register-collecting-blit canvas x y w h on off ox oy fx fy) (void))
+; register-collecting-blit/unregister-collecting-blit -- DrRacket's own
+; garbage-collection indicator (framework/private/frame.rkt's gc-canvas).
+; Real X11 implementation, mirroring gtk/win32's own procs.rkt delegation
+; shape exactly: canvas%'s methods (wx/qt/canvas.rkt) do the actual work,
+; gated on x11-gc-available? there (silent no-op under Wayland/non-X11,
+; docs/2026-09-22_report-linux.md §2.10).
+(define (unregister-collecting-blit canvas)
+  (send canvas unregister-collecting-blits))
+(define (register-collecting-blit canvas x y w h on off ox oy fx fy)
+  (send canvas register-collecting-blit x y w h on off ox oy fx fy))
 ; gtk's flush-display is `pre-event-sync` (its own, Qt-foreign event-pump
 ; primitive, common/queue.rkt) followed by gdk_display_flush (a pure X11
 ; protocol flush, no event dispatch). Qt has no exposed "push queued draws,

@@ -16,14 +16,17 @@
 (require racket/class
          racket/draw
          ffi/unsafe/atomic
+         ffi/unsafe/collect-callback
          "../common/canvas-mixin.rkt"
          "../common/backing-dc.rkt"
          "../common/queue.rkt"
          "../common/event.rkt"
+         "../../lock.rkt"
          "window.rkt"
          "panel.rkt"
          "utils.rkt"
-         "key-map.rkt")
+         "key-map.rkt"
+         "gcwin.rkt")
 
 (provide canvas%
          canvas-panel%)
@@ -302,6 +305,43 @@
       (when (getenv "PLT_QT_DEBUG")
         (eprintf "[qt-canvas] refresh -> queue-paint\n"))
       (send this queue-paint))
+
+    ; ---- GC indicator (DrRacket's status-bar gc-canvas) ------------------
+    ; wx/qt/platform.rkt's register-collecting-blit/unregister-collecting-blit
+    ; delegate here, exactly as gtk/win32's own procs.rkt delegate to their
+    ; canvas%'s same-named methods (docs/HACKING.md's public*/override*
+    ; invariant does not apply -- these names are define/public directly on
+    ; gtk's canvas% too, never public*/override*-mediated). x11-gc-available?
+    ; gates the whole thing off (silent no-op) under Wayland or on a non-X11
+    ; platform (Regel 4) -- see wx/qt/gcwin.rkt for the full design and the
+    ; GC-safety argument for what actually runs during the callback.
+    (define reg-blits null)
+
+    (define/private (register-one-blit x y w h on-gc-bitmap off-gc-bitmap)
+      (atomically
+       (let ([win (create-gc-window qt-handle x y w h)])
+         (let ([r (unsafe-add-collect-callbacks
+                   (make-gc-show-desc win on-gc-bitmap w h)
+                   (make-gc-hide-desc win off-gc-bitmap w h))])
+           (cons win r)))))
+
+    (define/public (register-collecting-blit x y w h on off on-x on-y off-x off-y)
+      (when (x11-gc-available?)
+        (let ([on  (fix-bitmap-size on  w h on-x on-y)]
+              [off (fix-bitmap-size off w h off-x off-y)])
+          (let ([on-gc-bitmap  (bitmap->gc-bitmap on  qt-handle)]
+                [off-gc-bitmap (bitmap->gc-bitmap off qt-handle)])
+            (atomically
+             (set! reg-blits (cons (register-one-blit x y w h
+                                                        on-gc-bitmap off-gc-bitmap)
+                                    reg-blits)))))))
+
+    (define/public (unregister-collecting-blits)
+      (atomically
+       (for ([r (in-list reg-blits)])
+         (free-gc-window (car r))
+         (unsafe-remove-collect-callbacks (cdr r)))
+       (set! reg-blits null)))
 
     ; ---- extras required by make-item% and glue layer ----
 

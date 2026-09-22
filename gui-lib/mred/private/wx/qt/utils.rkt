@@ -145,6 +145,8 @@
          shim_widget_set_cursor
          shim_widget_unset_cursor
          shim_get_mouse_state
+         shim_get_x11_display
+         shim_widget_get_x11_window
          _callback_t
          _mouse_cb_t
          _key_cb_t
@@ -856,3 +858,17 @@
                (_fun (out-x : (_ptr o _int)) (out-y : (_ptr o _int)) (out-flags : (_ptr o _int))
                      -> _void
                      -> (values out-x out-y out-flags))))
+
+; ---- X11 raw-window support (register-collecting-blit / wx/qt/gcwin.rkt) --
+; Nullable: #f (C NULL) when Qt isn't running the xcb platform plugin (e.g.
+; Wayland) -- gcwin.rkt's x11-gc-available? treats that as "unsupported
+; here", not an error.
+(define shim_get_x11_display
+  (get-ffi-obj "shim_get_x11_display" shim-lib
+               (_fun -> _pointer)))
+
+; QWidget::winId() -- the X11 Window XID directly (no gdk_x11_window_get_xid
+; -style lookup needed on this platform).
+(define shim_widget_get_x11_window
+  (get-ffi-obj "shim_widget_get_x11_window" shim-lib
+               (_fun _pointer -> _ulong)))
