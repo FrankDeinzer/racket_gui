@@ -42,6 +42,7 @@
          shim_panel_create
          shim_button_create
          shim_button_destroy
+         shim_button_set_label
          shim_menubar_create
          shim_menubar_add_menu
          shim_menubar_enable_at
@@ -370,6 +371,10 @@
 (define shim_button_destroy
   (get-ffi-obj "shim_button_destroy" shim-lib
                (_fun _pointer -> _void)))
+
+(define shim_button_set_label
+  (get-ffi-obj "shim_button_set_label" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
 
 ; ---- menu-bar ---------------------------------------------------------------
 

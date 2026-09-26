@@ -58,7 +58,7 @@
 
     (define/public (set-label lbl)
       (when (string? lbl)
-        (void)))  ; Qt label change not exposed in shim yet; spike only
+        (shim_button_set_label qt-handle lbl)))
 
     (define/public (set-border on?)   (void))
     (define/public (direct-show on?)  (void))
