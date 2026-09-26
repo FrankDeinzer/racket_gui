@@ -18,6 +18,54 @@
 ; inside the class body.
 (define list-append append)
 
+; mred/private/mrmenu.rkt's calc-labels appends a "\tCut=<mod-char><key-code>"
+; suffix to every macOS menu-item label that has a keyboard shortcut -- a
+; wxWidgets-era encoding meant *only* for wx/cocoa/menu-item.rkt's own parser
+; (set-menu-item-shortcut there: regexp-matches the exact same pattern, turns
+; it into an NSMenuItem keyEquivalent/modifierMask). Nothing else was ever
+; meant to see this string. Passed through raw to shim_action_create/
+; shim_action_set_label, it used to reach QAction::setText() verbatim --
+; showing the garbled internal encoding (or an invisible replacement
+; character) instead of a shortcut hint, and explaining both halves of the
+; user-visible bug (docs/HACKING.md): no visible "⌘C" next to Copy, and (for
+; the actual key-handling half) see shim_app_init's AA_MacDontSwapCtrlAndMeta
+; fix, a separate root cause.
+;
+; This only rewrites the suffix into a human-readable "⌘C"-style hint for
+; *display* -- it does not call QAction::setShortcut(), deliberately: this
+; backend's real shortcut dispatch already goes entirely through Racket's own
+; keymap chain (mred/private/wxtop.rkt's handle-menu-key), independent of any
+; native/Qt-level accelerator. Wiring a second, native Qt shortcut on top
+; would risk the same key press firing the callback twice (once via Qt's own
+; QShortcutMap, once via the existing Racket dispatch) -- untested, unbounded
+; downside for a purely cosmetic fix. A tab-suffixed label is exactly the
+; same convention gtk/win32's own labels already use here (e.g. "\tCtrl+C"),
+; which Qt's QMenu already renders as a right-aligned hint column without
+; needing a real QKeySequence -- this just teaches it macOS's own symbols
+; and modifier order (⌃⌥⇧⌘, per Apple's HIG) instead of leaking wx-cocoa's
+; internal wire format.
+(define (clean-macos-shortcut-label label)
+  (define m (regexp-match #rx"^([^\t]*)\tCut=(.)(.*)$" label))
+  (cond
+    [(not m) label]
+    [else
+     (define plain (cadr m))
+     (define flags (- (char->integer (string-ref (caddr m) 0)) (char->integer #\A)))
+     (define key-code (string->number (cadddr m)))
+     (cond
+       [(not key-code) label] ; malformed suffix -- don't guess, leave as-is
+       [else
+        (define shift?  (positive? (bitwise-and flags 1)))
+        (define option? (positive? (bitwise-and flags 2)))
+        (define ctl?    (positive? (bitwise-and flags 4)))
+        (define cmd?    (zero?     (bitwise-and flags 8))) ; bit 3 means "no cmd"
+        (string-append plain "\t"
+                        (if ctl? "⌃" "")
+                        (if option? "⌥" "")
+                        (if shift? "⇧" "")
+                        (if cmd? "⌘" "")
+                        (string (char-upcase (integer->char key-code))))])]))
+
 ; menu-bar% predicate — avoids circular require between menu.rkt and menu-bar.rkt.
 ; menu-bar.rkt registers itself at load time.
 (define menu-bar-pred (lambda (x) #f))
@@ -125,10 +173,11 @@
     ; checkable? : boolean
     (define/public (append id label help-or-sub checkable?)
       (drop-placeholder!)
+      (define clean-label (clean-macos-shortcut-label label))
       (define action
         (if (and help-or-sub (object? help-or-sub))
             ; submenu — help-or-sub is platform menu% (or glue extending it)
-            (shim_menu_add_submenu qt-menu label
+            (shim_menu_add_submenu qt-menu clean-label
                                    (send help-or-sub get-qt-menu))
             ; leaf item
             (let ([cb (lambda (_ud)
@@ -138,7 +187,7 @@
                               (lambda ()
                                 (send frame on-menu-command id))))))])
               (hash-set! retained-callbacks id cb)
-              (shim_action_create qt-menu label (if checkable? 1 0) cb #f))))
+              (shim_action_create qt-menu clean-label (if checkable? 1 0) cb #f))))
       (hash-set! item-table id action)
       (order-push! id action))
 
@@ -193,7 +242,7 @@
     ; ---- set-label ----------------------------------------------------------
     (define/public (set-label id str)
       (define action (hash-ref item-table id #f))
-      (when action (shim_action_set_label action str)))
+      (when action (shim_action_set_label action (clean-macos-shortcut-label str))))
 
     ; ---- popup --------------------------------------------------------------
     (define/public (popup x y widget cb)
