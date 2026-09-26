@@ -8,6 +8,7 @@
 (require racket/class
          racket/list
          "../common/queue.rkt"
+         "../common/event.rkt"
          "window.rkt"
          "utils.rkt")
 
@@ -17,6 +18,20 @@
 ; Capture racket/base's append before it is shadowed by define/public (append ...)
 ; inside the class body.
 (define list-append append)
+
+; A standalone popup-menu% (mrpopup.rkt) has no top-level-window parent to
+; queue events through — window%'s `popup-menu` (window.rkt) calls
+; `QMenu::popup()` (Rule 1: non-blocking, no exec()) and returns immediately,
+; so nothing on the Racket side keeps the mred-level popup-menu%/menu%
+; instance (and the `retained-callbacks` closures below) alive while the
+; native QMenu is still on screen and waiting for a click. gtk's menu%
+; (wx/gtk/menu.rkt `popup`) pins the same way via `global-prevent-gc`;
+; win32 never needs this because `TrackPopupMenu` blocks. A single slot is
+; enough here (not a set/hash): at most one popup-menu is ever genuinely
+; open at a time, and overwriting the slot on the next `popup` call bounds
+; a cancelled-and-abandoned popup's leak to one object instead of pinning
+; it forever.
+(define pinned-popup #f)
 
 ; mred/private/mrmenu.rkt's calc-labels appends a "\tCut=<mod-char><key-code>"
 ; suffix to every macOS menu-item label that has a keyboard shortcut -- a
@@ -74,14 +89,29 @@
 
 (define menu%
   (class window%
-    ; popup-label, popup-callback, font: used by GTK popup menus; ignored here
+    ; popup-label: QMenu title, cosmetic only (top-level menu-bar menus get
+    ; their title via shim_menu_set_title/shim_menu_add_submenu instead).
+    ; popup-callback/font: see `popup`/`on-popup` below — the mrpopup.rkt
+    ; fallback dispatch path for a standalone popup-menu%'s item clicks.
     (init [popup-label #f] [popup-callback #f] [font #f])
     (super-new [handle #f] [parent #f])
+
+    ; init args aren't visible inside a method's own closures (only in the
+    ; class body's immediate top level) -- rebind into a field so `append`'s
+    ; leaf-item callback below can close over it.
+    (define the-popup-callback popup-callback)
 
     ; ---- Qt handle ----------------------------------------------------------
     (define qt-menu (shim_menu_create (or popup-label "")))
 
     (define/public (get-qt-menu) qt-menu)
+
+    ; ---- standalone-popup dispatch (mrpopup.rkt protocol) --------------------
+    ; Set by `popup` below; consumed by the leaf-item callback in `append`
+    ; when `find-top-frame` can't resolve a frame (i.e. this menu% was shown
+    ; via window%'s `popup-menu`, not attached to a menu-bar). Mirrors gtk's
+    ; `do-selected` fallback to `on-popup` (wx/gtk/menu.rkt).
+    (define on-popup #f)
 
     ; ---- parent tracking ----------------------------------------------------
     (define the-parent #f)
@@ -182,10 +212,27 @@
             ; leaf item
             (let ([cb (lambda (_ud)
                         (let ([frame (find-top-frame)])
-                          (when frame
-                            (queue-event (send frame get-eventspace)
+                          (cond
+                            [frame
+                             (queue-event (send frame get-eventspace)
+                               (lambda ()
+                                 (send frame on-menu-command id)))]
+                            ; Standalone popup-menu% (no menu-bar parent):
+                            ; fall back to the mrpopup.rkt protocol via
+                            ; `on-popup`/`popup-callback` (see `popup` below).
+                            ; Consume `on-popup` and unpin before queuing —
+                            ; `do-popup` below runs later, off the atomic
+                            ; callback, so building the event there (not
+                            ; here) keeps Rule 2 (post-only, never block).
+                            [(and on-popup the-popup-callback)
+                             (define do-popup on-popup)
+                             (set! on-popup #f)
+                             (when (eq? pinned-popup this) (set! pinned-popup #f))
+                             (do-popup
                               (lambda ()
-                                (send frame on-menu-command id))))))])
+                                (define e (new popup-event% [event-type 'menu-popdown]))
+                                (send e set-menu-id id)
+                                (the-popup-callback this e)))])))])
               (hash-set! retained-callbacks id cb)
               (shim_action_create qt-menu clean-label (if checkable? 1 0) cb #f))))
       (hash-set! item-table id action)
@@ -245,7 +292,15 @@
       (when action (shim_action_set_label action (clean-macos-shortcut-label str))))
 
     ; ---- popup --------------------------------------------------------------
+    ; `cb` (window%'s popup-menu, e.g. wx/qt/window.rkt) is the eventspace
+    ; queuing closure for the *invoking* window; `widget` is unused here
+    ; (win32/gtk need it for OS-level menu positioning/anchoring, we don't).
+    ; Pin `this` for the GC-safety reason documented at `pinned-popup`'s
+    ; definition above, and stash `cb` as `on-popup` for the leaf-item
+    ; callback's mrpopup.rkt fallback.
     (define/public (popup x y widget cb)
+      (set! pinned-popup this)
+      (set! on-popup cb)
       (shim_menu_popup qt-menu x y))
 
     ; ---- stubs required by glue / mrmenu ------------------------------------
