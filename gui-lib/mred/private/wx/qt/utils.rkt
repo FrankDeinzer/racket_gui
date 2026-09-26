@@ -48,6 +48,7 @@
          shim_menubar_remove_at
          shim_menu_create
          shim_menu_set_about_to_show_cb
+         shim_menu_set_about_to_hide_cb
          shim_menu_set_title
          shim_menu_add_submenu
          shim_menu_add_separator
@@ -404,6 +405,10 @@
 
 (define shim_menu_set_about_to_show_cb
   (get-ffi-obj "shim_menu_set_about_to_show_cb" shim-lib
+               (_fun _pointer _callback_t _pointer -> _void)))
+
+(define shim_menu_set_about_to_hide_cb
+  (get-ffi-obj "shim_menu_set_about_to_hide_cb" shim-lib
                (_fun _pointer _callback_t _pointer -> _void)))
 
 (define shim_menu_add_submenu

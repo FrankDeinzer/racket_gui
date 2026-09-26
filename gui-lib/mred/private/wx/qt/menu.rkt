@@ -113,6 +113,19 @@
     ; `do-selected` fallback to `on-popup` (wx/gtk/menu.rkt).
     (define on-popup #f)
 
+    ; cancel-none-box: reset to a fresh (box #f) on every `popup`. The leaf-item
+    ; callback flips it to #t the instant a real selection happens (still
+    ; synchronous, still inside the atomic FFI callback -- a plain box mutation,
+    ; not a call into user code). `about-to-hide-cb` below never decides
+    ; select-vs-cancel itself; it only ever queues a *tentative* 'menu-popdown-none
+    ; thunk that checks this box once it actually runs, later, off the atomic
+    ; callback. That check-later design (identical to gtk's `cancel-none-box` in
+    ; wx/gtk/menu.rkt) is what makes this correct regardless of whether Qt fires
+    ; QMenu::aboutToHide before or after the chosen QAction's `triggered` --
+    ; empirically the former (see shim.cpp's RacketMenu comment), but nothing
+    ; here depends on that order holding.
+    (define cancel-none-box (box #t))
+
     ; ---- parent tracking ----------------------------------------------------
     (define the-parent #f)
     (define/public (set-parent p) (set! the-parent p))
@@ -135,6 +148,33 @@
               (lambda ()
                 (send frame on-menu-click)))))))
     (shim_menu_set_about_to_show_cb qt-menu about-to-show-cb #f)
+
+    ; ---- about-to-hide -> standalone-popup "dismissed without selecting" ----
+    ; Only ever acts when `on-popup` is set, i.e. this menu% is currently shown
+    ; as a standalone popup (see `popup` below) -- a plain menu-bar/submenu
+    ; open-close cycle never touches `on-popup`, so this is a no-op there.
+    ; Captures `on-popup`/`cancel-none-box` by value and defers the actual
+    ; decision into the queued thunk (see `cancel-none-box`'s comment above):
+    ; only fires 'menu-popdown-none if the box is *still* #f once the thunk
+    ; runs, i.e. no real selection flipped it in the meantime. Mirrors gtk's
+    ; `do-no-selected` (wx/gtk/menu.rkt) exactly, including not unpinning
+    ; `pinned-popup` here synchronously -- that stays set until whichever
+    ; Racket-side callback (this thunk, or the leaf-item's select callback)
+    ; actually resolves the popup, so the object has a live GC root for the
+    ; entire gap between the native signal(s) firing and that resolution.
+    (define about-to-hide-cb
+      (lambda (_ud)
+        (when on-popup
+          (let* ([e (new popup-event% [event-type 'menu-popdown])]
+                 [pu on-popup]
+                 [cnb cancel-none-box])
+            (send e set-menu-id #f)
+            (pu (lambda ()
+                  (when (eq? on-popup pu) (set! on-popup #f))
+                  (unless (unbox cnb)
+                    (when (eq? pinned-popup this) (set! pinned-popup #f))
+                    (the-popup-callback this e))))))))
+    (shim_menu_set_about_to_hide_cb qt-menu about-to-hide-cb #f)
 
     ; ---- item tracking ------------------------------------------------------
     ; item-table: id → QAction* (leaf items only)
@@ -224,9 +264,15 @@
                             ; `do-popup` below runs later, off the atomic
                             ; callback, so building the event there (not
                             ; here) keeps Rule 2 (post-only, never block).
+                            ; Flipping `cancel-none-box` here (synchronously,
+                            ; still inside the atomic callback) is what tells
+                            ; `about-to-hide-cb`'s later, deferred check that a
+                            ; real selection happened — see that field's
+                            ; comment for why this is order-independent.
                             [(and on-popup the-popup-callback)
                              (define do-popup on-popup)
                              (set! on-popup #f)
+                             (set-box! cancel-none-box #t)
                              (when (eq? pinned-popup this) (set! pinned-popup #f))
                              (do-popup
                               (lambda ()
@@ -301,6 +347,7 @@
     (define/public (popup x y widget cb)
       (set! pinned-popup this)
       (set! on-popup cb)
+      (set! cancel-none-box (box #f))
       (shim_menu_popup qt-menu x y))
 
     ; ---- stubs required by glue / mrmenu ------------------------------------
