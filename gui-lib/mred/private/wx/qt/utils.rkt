@@ -80,6 +80,30 @@
          shim_list_box_scroll_to
          shim_list_box_first_visible
          shim_list_box_visible_count
+         shim_list_tree_create
+         shim_list_tree_set_headers_visible
+         shim_list_tree_set_sections_movable
+         shim_list_tree_set_header_clicked_cb
+         shim_list_tree_set_column_label
+         shim_list_tree_set_column_width
+         shim_list_tree_get_column_width
+         shim_list_tree_move_column
+         shim_list_tree_column_at_visual_pos
+         shim_list_tree_append_row
+         shim_list_tree_set_cell
+         shim_list_tree_clear
+         shim_list_tree_delete_row
+         shim_list_tree_count
+         shim_list_tree_is_selected
+         shim_list_tree_select
+         shim_list_tree_set_current
+         shim_list_tree_selected_count
+         shim_list_tree_selected_at
+         shim_list_tree_scroll_to
+         shim_list_tree_first_visible
+         shim_list_tree_visible_count
+         shim_list_tree_append_column
+         shim_list_tree_delete_column
          shim_slider_create
          shim_slider_set_value
          shim_slider_get_value
@@ -156,7 +180,8 @@
          _wheel_cb_t
          _resize_cb_t
          _file_dialog_cb_t
-         _printer_dialog_cb_t)
+         _printer_dialog_cb_t
+         _header_click_cb_t)
 
 ; Locate the shim library.
 ; Path from this file: 7 levels up = project root, then qt-shim/build/<preset>/
@@ -212,6 +237,11 @@
 
 ; Printer/page-setup dialog result callback: ud, accepted (1=QDialog::Accepted).
 (define _printer_dialog_cb_t
+  (_fun #:atomic? #t _pointer _int -> _void))
+
+; Column header click callback (multi-column list-box% tree path, §60.6):
+; ud, logical column index.
+(define _header_click_cb_t
   (_fun #:atomic? #t _pointer _int -> _void))
 
 (define shim_version
@@ -541,6 +571,115 @@
 (define shim_list_box_visible_count
   (get-ffi-obj "shim_list_box_visible_count" shim-lib
                (_fun _pointer -> _int)))
+
+; ---- list-tree (list-box%'s multi-column path, §60.6) --------------------
+; Separate export family from shim_list_box_* above -- see shim.cpp's own
+; section comment. Selection/scroll functions mirror the list-box ones
+; 1:1 (same argument shapes), only the underlying widget differs.
+
+(define shim_list_tree_create
+  (get-ffi-obj "shim_list_tree_create" shim-lib
+               (_fun _pointer _int _int _callback_t _pointer -> _pointer)))
+
+(define shim_list_tree_set_headers_visible
+  (get-ffi-obj "shim_list_tree_set_headers_visible" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_tree_set_sections_movable
+  (get-ffi-obj "shim_list_tree_set_sections_movable" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_tree_set_header_clicked_cb
+  (get-ffi-obj "shim_list_tree_set_header_clicked_cb" shim-lib
+               (_fun _pointer _header_click_cb_t _pointer -> _void)))
+
+(define shim_list_tree_set_column_label
+  (get-ffi-obj "shim_list_tree_set_column_label" shim-lib
+               (_fun _pointer _int _string/utf-8 -> _void)))
+
+(define shim_list_tree_set_column_width
+  (get-ffi-obj "shim_list_tree_set_column_width" shim-lib
+               (_fun _pointer _int _int _int _int -> _void)))
+
+; QHeaderView::sectionSize() -> (values width min max), the latter two from
+; RacketTreeWidget's own tracking (see shim.cpp) since Qt's header has no
+; native per-column min/max.
+(define shim_list_tree_get_column_width
+  (get-ffi-obj "shim_list_tree_get_column_width" shim-lib
+               (_fun _pointer _int
+                     (out-w  : (_ptr o _int))
+                     (out-mn : (_ptr o _int))
+                     (out-mx : (_ptr o _int))
+                     -> _void
+                     -> (values out-w out-mn out-mx))))
+
+(define shim_list_tree_move_column
+  (get-ffi-obj "shim_list_tree_move_column" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_list_tree_column_at_visual_pos
+  (get-ffi-obj "shim_list_tree_column_at_visual_pos" shim-lib
+               (_fun _pointer _int -> _int)))
+
+(define shim_list_tree_append_row
+  (get-ffi-obj "shim_list_tree_append_row" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_list_tree_set_cell
+  (get-ffi-obj "shim_list_tree_set_cell" shim-lib
+               (_fun _pointer _int _int _string/utf-8 -> _void)))
+
+(define shim_list_tree_clear
+  (get-ffi-obj "shim_list_tree_clear" shim-lib
+               (_fun _pointer -> _void)))
+
+(define shim_list_tree_delete_row
+  (get-ffi-obj "shim_list_tree_delete_row" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_tree_count
+  (get-ffi-obj "shim_list_tree_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_tree_is_selected
+  (get-ffi-obj "shim_list_tree_is_selected" shim-lib
+               (_fun _pointer _int -> _int)))
+
+(define shim_list_tree_select
+  (get-ffi-obj "shim_list_tree_select" shim-lib
+               (_fun _pointer _int _int -> _void)))
+
+(define shim_list_tree_set_current
+  (get-ffi-obj "shim_list_tree_set_current" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_tree_selected_count
+  (get-ffi-obj "shim_list_tree_selected_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_tree_selected_at
+  (get-ffi-obj "shim_list_tree_selected_at" shim-lib
+               (_fun _pointer _int -> _int)))
+
+(define shim_list_tree_scroll_to
+  (get-ffi-obj "shim_list_tree_scroll_to" shim-lib
+               (_fun _pointer _int -> _void)))
+
+(define shim_list_tree_first_visible
+  (get-ffi-obj "shim_list_tree_first_visible" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_tree_visible_count
+  (get-ffi-obj "shim_list_tree_visible_count" shim-lib
+               (_fun _pointer -> _int)))
+
+(define shim_list_tree_append_column
+  (get-ffi-obj "shim_list_tree_append_column" shim-lib
+               (_fun _pointer _string/utf-8 -> _void)))
+
+(define shim_list_tree_delete_column
+  (get-ffi-obj "shim_list_tree_delete_column" shim-lib
+               (_fun _pointer _int -> _void)))
 
 ; ---- slider (slider%) ------------------------------------------------------
 
