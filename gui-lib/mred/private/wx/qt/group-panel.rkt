@@ -48,6 +48,25 @@
     (define/private (content-margins)
       (shim_group_panel_get_content_margins qt-handle))
 
+    ; Seed a chrome-only size (zero content, just the title/border margins)
+    ; right after construction. Without this, get-width/get-height read 0 at
+    ; the very first do-get-graphical-min-size query (wxpanel.rkt), which
+    ; runs BEFORE any real set-size call. get-client-size below then also
+    ; clamps to 0, collapsing do-graphical-size's delta-w/delta-h --
+    ; "(get-width) - client-w" -- from the true (l+r)/(t+b) chrome overhead
+    ; down to 0. That silently starves this panel's own reported min-height
+    ; by exactly its title-bar height, which is exactly what let
+    ; DrRacket's "Choose Language" dialog's Collection Paths button row get
+    ; placed past the group box's true bottom edge (§60.4,
+    ; docs/HACKING.md). gtk avoids this because its group-panel% tracks the
+    ; client offset from a live GtkAllocation signal instead of subtracting
+    ; from a possibly-still-zero get-height/get-width; win32 avoids it by
+    ; calling set-size directly in its own constructor. This mirrors win32's
+    ; fix, seeded generically from content-margins instead of a hardcoded
+    ; label height.
+    (let-values ([(l t r b) (content-margins)])
+      (set-size #f #f (+ l r) (+ t b)))
+
     (define/override (set-size x y nw nh)
       (super set-size x y nw nh)
       (when (and nw (> nw 0) nh (> nh 0))
@@ -64,6 +83,9 @@
     ; trick as tab-panel%'s get-client-size).
     (define/override (get-client-size wb hb)
       (define-values (l t r b) (content-margins))
+      (when (getenv "PLT_QT_DEBUG")
+        (eprintf "[qt-group-panel] get-client-size: get-w=~a get-h=~a l=~a t=~a r=~a b=~a\n"
+                 (get-width) (get-height) l t r b))
       (set-box! wb (max 0 (- (get-width)  l r)))
       (set-box! hb (max 0 (- (get-height) t b))))
 
