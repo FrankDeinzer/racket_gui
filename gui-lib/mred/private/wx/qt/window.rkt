@@ -188,7 +188,15 @@
             (shim_widget_set_cursor handle (send (send c get-driver) get-handle))
             (shim_widget_unset_cursor handle))))
     (define/public (reset-cursor default) (void))
-    (define/public (get-dialog-level) 0)
+    ; frame%'s override terminates the chain at 0 (qt/frame.rkt); every other
+    ; window%-derived class delegates to its parent, mirroring gtk/window.rkt:735
+    ; and win32/window.rkt:855. Without this, other-modal? (wx/common/queue.rkt)
+    ; sees dl=0 for a canvas%/editor-canvas% nested inside an open modal dialog%
+    ; and swallows its keyboard/mouse events (§61).
+    (define/public (get-dialog-level)
+      (if (and parent (object? parent))
+          (send parent get-dialog-level)
+          0))
     (define/public (frame-relative-dialog-status win) #f)
     ; show-control: NOT here — added by make-top-container% (wxtop.rkt) via public*
     ; client-to-screen: QWidget::mapToGlobal via shim_widget_client_to_screen

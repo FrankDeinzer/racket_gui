@@ -256,7 +256,15 @@
 
     (define/public (get-dc) dc)
 
-    (define/public (get-canvas-background-for-backing) #f)
+    ; Mirrors gtk/win32/cocoa's (and clear-bg? bg-col): the regular auto-repaint
+    ; path (canvas-mixin.rkt's do-on-paint) uses this to fill the backing bitmap
+    ; before the user's on-paint runs. Was unconditionally #f, so set-canvas-background
+    ; had no effect on the auto-clear -- masked by editor-canvas%/full-repaint canvases,
+    ; visible on a raw canvas% with a non-covering paint callback (§61).
+    (define/public (get-canvas-background-for-backing)
+      (and (not (memq 'transparent the-style))
+           (not (memq 'no-autoclear the-style))
+           bg-col))
     (define/public (skip-pre-paint?)       #f)
     (define/public (worthwhile-to-paint?)  (send this is-shown-to-root?))
 
