@@ -14,6 +14,7 @@
          shim_window_set_size
          shim_window_set_resize_cb
          shim_window_set_drop_cb
+         shim_window_clear_drop_cb
          shim_window_set_size_limits
          _drop_cb_t
          shim_window_show
@@ -1042,7 +1043,12 @@
 ; tolerantly (like shim_key_keysym) so an older shim only loses these features.
 (define shim_window_set_drop_cb
   (get-ffi-obj "shim_window_set_drop_cb" shim-lib
-               (_fun _pointer (_or-null _drop_cb_t) _pointer -> _void)
+               (_fun _pointer _drop_cb_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+; Same export, NULL callback = stop accepting drops.
+(define shim_window_clear_drop_cb
+  (get-ffi-obj "shim_window_set_drop_cb" shim-lib
+               (_fun _pointer _pointer _pointer -> _void)
                (lambda () (lambda (w cb ud) (void)))))
 (define shim_window_set_size_limits
   (get-ffi-obj "shim_window_set_size_limits" shim-lib

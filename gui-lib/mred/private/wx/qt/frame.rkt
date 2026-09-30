@@ -205,7 +205,9 @@
         (qt-queue-window-event this
           (lambda () (send this on-drop-file (string->path path))))))
     (define/override (drag-accept-files on?)
-      (shim_window_set_drop_cb qt-handle (and on? drop-cb) #f))
+      (if on?
+          (shim_window_set_drop_cb qt-handle drop-cb #f)
+          (shim_window_clear_drop_cb qt-handle #f #f)))
 
     ; get-focus-window: inherited from window% (tracks focus via on-set-focus/on-kill-focus)
     ; add-border-button, forget-child: NOT here — added by wxtop.rkt via public*
