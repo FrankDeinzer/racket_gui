@@ -82,6 +82,7 @@
             (send this set-size #f #f (+ THICKNESS value-w) (max value-h MIN_LENGTH))
             (send this set-size #f #f (max value-w MIN_LENGTH) (+ THICKNESS value-h)))
         (send this seed-size-from-native-hint))
+    (send this qt-forward-nav-keys!)
 
     ; ---- sizing ----
 

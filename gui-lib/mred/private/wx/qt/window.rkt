@@ -250,6 +250,21 @@
         (when (and (> hint-w 0) (> hint-h 0))
           (send this set-size #f #f hint-w hint-h))))
 
+    ; Escape/Return from a native control (button, list, check box ...) reach
+    ; racket/gui as key-event%s, so the dialog's default-button/cancel
+    ; traversal (pre-on-char of the top level) sees them.  Called once by each
+    ; control class after super-new.  Regel 2: the atomic callback only posts.
+    (define nav-key-cb
+      (lambda (ud key mods)
+        (define e (new key-event%
+                       [key-code     (if (= key #x01000000) 'escape #\return)]
+                       [shift-down   (not (zero? (bitwise-and mods 1)))]
+                       [control-down (not (zero? (bitwise-and mods 2)))]))
+        (qt-queue-window-event this
+          (lambda () (send this dispatch-on-char e #f)))))
+    (define/public (qt-forward-nav-keys!)
+      (when handle (shim_widget_set_nav_key_cb handle nav-key-cb #f)))
+
     (define/public (get-qt-handle)       handle)
     ; Returns the QWidget* that children should use as their Qt parent.
     ; frame% overrides to return the central widget; panel% to its own widget.

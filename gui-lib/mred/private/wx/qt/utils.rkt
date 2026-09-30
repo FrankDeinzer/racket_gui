@@ -14,6 +14,8 @@
          shim_window_set_size
          shim_window_set_resize_cb
          shim_window_set_drop_cb
+         shim_widget_set_nav_key_cb
+         _nav_key_cb_t
          shim_window_clear_drop_cb
          shim_window_set_size_limits
          _drop_cb_t
@@ -232,6 +234,10 @@
 
 ; Native top-level resize callback: ud, new width, new height.
 (define _resize_cb_t
+  (_fun #:atomic? #t _pointer _int _int -> _void))
+
+; Escape/Return from a native control: ud, Qt::Key, mods-bitmask.
+(define _nav_key_cb_t
   (_fun #:atomic? #t _pointer _int _int -> _void))
 
 ; Dropped-file callback: ud, UTF-8 path (copied on conversion).
@@ -1054,3 +1060,9 @@
   (get-ffi-obj "shim_window_set_size_limits" shim-lib
                (_fun _pointer _int _int _int _int -> _void)
                (lambda () (lambda (w a b c d) (void)))))
+
+; Escape/Return forwarding for native controls (window.rkt qt-forward-nav-keys!).
+(define shim_widget_set_nav_key_cb
+  (get-ffi-obj "shim_widget_set_nav_key_cb" shim-lib
+               (_fun _pointer _nav_key_cb_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))

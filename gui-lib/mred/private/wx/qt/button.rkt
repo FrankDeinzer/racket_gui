@@ -43,6 +43,7 @@
                [eventspace the-eventspace]
                [no-show?   (and (memq 'deleted style) #t)])
     (send this seed-size-from-native-hint)
+    (send this qt-forward-nav-keys!)
 
     ; ---- sizing ----
 

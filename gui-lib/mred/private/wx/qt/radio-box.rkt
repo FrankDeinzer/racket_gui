@@ -51,6 +51,7 @@
                [no-show?   (and (memq 'deleted style) #t)])
     ; After buttons, not before: sizeHint() should reflect the built layout.
     (send this seed-size-from-native-hint)
+    (send this qt-forward-nav-keys!)
 
     ; ---- sizing ----
 

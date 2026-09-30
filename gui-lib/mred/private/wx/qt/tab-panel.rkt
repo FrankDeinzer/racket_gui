@@ -66,6 +66,7 @@
                [parent     parent]
                [eventspace the-eventspace]
                [no-show?   (and (memq 'deleted style) #t)])
+    (send this qt-forward-nav-keys!)
 
     ; ---- sizing ----
     ; No QLayout: tabbar gets its own sizeHint height at the top, content

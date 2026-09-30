@@ -119,6 +119,7 @@
     (set! ignore-click? #f)
     ; After choices, not before: sizeHint() should reflect populated rows.
     (send this seed-size-from-native-hint)
+    (send this qt-forward-nav-keys!)
 
     ; ---- sizing ----
 
