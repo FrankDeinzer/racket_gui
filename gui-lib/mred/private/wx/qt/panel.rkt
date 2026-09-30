@@ -46,7 +46,10 @@
 
     (define/override (set-size x y nw nh)
       (super set-size x y nw nh)
-      (when (and qt-handle nw (> nw 0) nh (> nh 0))
+      ; Zero sizes are applied too (only the width/height bookkeeping in
+      ; window% ignores them): a panel that shrinks to 0 must not keep its old
+      ; geometry and keep swallowing clicks over its neighbours.
+      (when (and qt-handle nw nh (>= nw 0) (>= nh 0))
         (shim_widget_set_geometry qt-handle
                                   (if (and x (>= x 0)) x 0)
                                   (if (and y (>= y 0)) y 0)
