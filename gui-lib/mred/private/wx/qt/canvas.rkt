@@ -147,14 +147,17 @@
                [x x] [y y]
                [shift-down   (qt-mods->shift?   mods)]
                [control-down (qt-mods->control? mods)]
-               [meta-down    (qt-mods->meta?    mods)]
-               [alt-down     (qt-mods->alt?     mods)]))
+               [meta-down    (qt-mods->meta-down? mods)]
+               [mod4-down    (qt-mods->mod4-down? mods)]
+               [alt-down     (qt-mods->alt-down?  mods)]))
         (queue-event the-eventspace
                      (lambda () (send this dispatch-on-event e #f)))))
 
     ; Key: type(0=press,1=release), Qt::Key, text-char(unicode), mods
     (define key-cb
       (lambda (ud type key text-char mods)
+        (define scan (qt-mods-scancode mods))
+        (set! mods (qt-mods-modifiers mods))
         (define kc (qt-key->racket-keycode key text-char mods))
         (when kc
           (define is-up? (= type 1))
@@ -168,6 +171,12 @@
                  [meta-down    (qt-mods->meta-down? mods)]
                  [mod4-down    (qt-mods->mod4-down? mods)]
                  [alt-down     (qt-mods->alt-down?  mods)]))
+          (when (and (char? kc) (> scan 0) (eq? (system-type) 'unix))
+            (let-values ([(s ag sag cl) (qt-key-alternates scan mods shim_key_keysym)])
+              (when s   (send e set-other-shift-key-code s))
+              (when ag  (send e set-other-altgr-key-code ag))
+              (when sag (send e set-other-shift-altgr-key-code sag))
+              (when cl  (send e set-other-caps-key-code cl))))
           (when is-up?
             (send e set-key-release-code kc))
           (queue-event the-eventspace
@@ -202,8 +211,9 @@
                  [key-code     code]
                  [shift-down   (qt-mods->shift?   mods)]
                  [control-down (qt-mods->control? mods)]
-                 [meta-down    (qt-mods->meta?    mods)]
-                 [alt-down     (qt-mods->alt?     mods)]))
+                 [meta-down    (qt-mods->meta-down? mods)]
+                 [mod4-down    (qt-mods->mod4-down? mods)]
+                 [alt-down     (qt-mods->alt-down?  mods)]))
           (send e set-wheel-steps steps)
           ; A scrollable canvas-panel% gets first refusal: nothing downstream
           ; of dispatch-on-char would scroll it (see qt-wheel-scroll below).

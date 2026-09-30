@@ -172,6 +172,7 @@
          shim_widget_unset_cursor
          shim_get_mouse_state
          shim_get_x11_display
+         shim_key_keysym
          shim_widget_get_x11_window
          _callback_t
          _mouse_cb_t
@@ -1021,3 +1022,11 @@
 (define shim_widget_get_x11_window
   (get-ffi-obj "shim_widget_get_x11_window" shim-lib
                (_fun _pointer -> _ulong)))
+
+; X11 keysym of a hardware keycode at shift level 0/1 (0 = none).  Feeds
+; key-event%'s other-*-key-code fields (key-map.rkt).  Tolerant of an older
+; shim binary: absent -> always 0 -> the fields stay #f, nothing else breaks.
+(define shim_key_keysym
+  (get-ffi-obj "shim_key_keysym" shim-lib
+               (_fun _int _int -> _int)
+               (lambda () (lambda (kc lv) 0))))

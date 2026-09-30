@@ -14,6 +14,9 @@
          qt-mods->meta-down?
          qt-mods->alt-down?
          qt-mods->mod4-down?
+         qt-key-alternates
+         qt-mods-modifiers
+         qt-mods-scancode
          qt-buttons->left?
          qt-buttons->middle?
          qt-buttons->right?)
@@ -101,3 +104,32 @@
          (integer->char key))]
     ; Fallback: unknown special key
     [else #f]))
+
+;; The shim packs the X11 hardware keycode above the modifier bits
+;; (mods = flags | keycode << 8, Linux only; 0 elsewhere).
+(define (qt-mods-modifiers m) (bitwise-and m #xff))
+(define (qt-mods-scancode  m) (arithmetic-shift m -8))
+
+;; key-event%'s other-shift / other-altgr / other-shift-altgr / other-caps
+;; key codes (racket/gui keymaps match Ctrl+Shift bindings such as Redo's
+;; `c:s:z` through them).  Mirrors gtk/keymap.rkt `get-alts`: the same
+;; hardware key re-translated with Shift toggled, "AltGr" (gtk emulates it as
+;; Ctrl+Alt: only offered when both or neither are held, and there it just
+;; keeps the current level), and Caps Lock toggled.  `keysym-at` is
+;; (keycode level) -> X keysym at shift level 0/1, or 0.
+(define (keysym->char ks)
+  (cond [(<= #x20 ks #x7e) (integer->char ks)]
+        [(<= #xa0 ks #xff) (integer->char ks)]
+        [(>= ks #x1000100) (integer->char (- ks #x1000000))]
+        [else #f]))
+(define (qt-key-alternates scan mods keysym-at)
+  (define shift? (qt-mods->shift? mods))
+  (define same-ca? (eq? (qt-mods->control? mods) (qt-mods->alt? mods)))
+  (define (at s?) (keysym->char (keysym-at scan (if s? 1 0))))
+  (define cur (at shift?))
+  (values (at (not shift?))
+          (and same-ca? cur)
+          (and same-ca? (at (not shift?)))
+          (and cur (cond [(char-lower-case? cur) (char-upcase cur)]
+                         [(char-upper-case? cur) (char-downcase cur)]
+                         [else cur]))))
