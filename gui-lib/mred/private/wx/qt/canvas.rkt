@@ -155,7 +155,7 @@
     ; Key: type(0=press,1=release), Qt::Key, text-char(unicode), mods
     (define key-cb
       (lambda (ud type key text-char mods)
-        (define kc (qt-key->racket-keycode key text-char))
+        (define kc (qt-key->racket-keycode key text-char mods))
         (when kc
           (define is-up? (= type 1))
           (define e
@@ -165,8 +165,9 @@
                  [key-code     (if is-up? 'release kc)]
                  [shift-down   (qt-mods->shift?   mods)]
                  [control-down (qt-mods->control? mods)]
-                 [meta-down    (qt-mods->meta?    mods)]
-                 [alt-down     (qt-mods->alt?     mods)]))
+                 [meta-down    (qt-mods->meta-down? mods)]
+                 [mod4-down    (qt-mods->mod4-down? mods)]
+                 [alt-down     (qt-mods->alt-down?  mods)]))
           (when is-up?
             (send e set-key-release-code kc))
           (queue-event the-eventspace
