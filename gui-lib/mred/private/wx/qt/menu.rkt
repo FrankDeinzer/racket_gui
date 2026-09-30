@@ -236,6 +236,31 @@
           [(and p (is-a? p menu%)) (loop (send p get-parent-obj))]
           [else #f])))
 
+    ; ---- popup submenus (Block D §2.5) --------------------------------------
+    ; A leaf inside a submenu of a standalone popup has no menu-bar/frame, and
+    ; `on-popup` lives on the *root* menu that `popup` was called on.  `append`
+    ; now records the parent chain for submenus (gtk does the same), and the
+    ; leaf callback forwards to the root, which owns the mrpopup.rkt state.
+    (define/public (popup-root)
+      (if (and the-parent (is-a? the-parent menu%))
+          (send the-parent popup-root)
+          this))
+    (define/public (popup-select id)
+      (when (and on-popup the-popup-callback)
+        ; Consume `on-popup` and unpin before queuing -- `do-popup` runs later,
+        ; off the atomic callback (Regel 2).  Flipping `cancel-none-box` here
+        ; (synchronously) tells the deferred about-to-hide check that a real
+        ; selection happened; see that field's comment.
+        (define do-popup on-popup)
+        (set! on-popup #f)
+        (set-box! cancel-none-box #t)
+        (when (eq? pinned-popup this) (set! pinned-popup #f))
+        (do-popup
+         (lambda ()
+           (define e (new popup-event% [event-type 'menu-popdown]))
+           (send e set-menu-id id)
+           (the-popup-callback this e)))))
+
     ; ---- append -------------------------------------------------------------
     ; id      : platform menu-item% token (hash key); #f for separators
     ; label   : display string
@@ -247,8 +272,10 @@
       (define action
         (if (and help-or-sub (object? help-or-sub))
             ; submenu — help-or-sub is platform menu% (or glue extending it)
-            (shim_menu_add_submenu qt-menu clean-label
-                                   (send help-or-sub get-qt-menu))
+            (begin
+              (send help-or-sub set-parent this)
+              (shim_menu_add_submenu qt-menu clean-label
+                                     (send help-or-sub get-qt-menu)))
             ; leaf item
             (let ([cb (lambda (_ud)
                         (let ([frame (find-top-frame)])
@@ -269,16 +296,7 @@
                             ; `about-to-hide-cb`'s later, deferred check that a
                             ; real selection happened — see that field's
                             ; comment for why this is order-independent.
-                            [(and on-popup the-popup-callback)
-                             (define do-popup on-popup)
-                             (set! on-popup #f)
-                             (set-box! cancel-none-box #t)
-                             (when (eq? pinned-popup this) (set! pinned-popup #f))
-                             (do-popup
-                              (lambda ()
-                                (define e (new popup-event% [event-type 'menu-popdown]))
-                                (send e set-menu-id id)
-                                (the-popup-callback this e)))])))])
+                            [else (send (popup-root) popup-select id)])))])
               (hash-set! retained-callbacks id cb)
               (shim_action_create qt-menu clean-label (if checkable? 1 0) cb #f))))
       (hash-set! item-table id action)
