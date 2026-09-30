@@ -68,6 +68,16 @@
                [no-show?   (and (memq 'deleted style) #t)])
     (send this qt-forward-nav-keys!)
 
+    ; Seed a chrome-only size (tab strip height, no content) right after
+    ; construction -- same latent 0-clamp as group-panel% before §61.1:
+    ; get-client-size below subtracts the strip from get-height, which still
+    ; reads 0 at the very first do-get-graphical-min-size query, so the
+    ; panel's chrome overhead (delta-h) collapsed to 0 and DrRacket's
+    ; '(deleted ...) tab bar was laid out 0 px high (free test 2026-09-30:
+    ; no tab bar with two files; tab-bar-deleted-probe.rkt: Qt 500x0, gtk
+    ; 500x37).  `super set-size` only records the size (no geometry call).
+    (super set-size #f #f 1 (tab-height))
+
     ; ---- sizing ----
     ; No QLayout: tabbar gets its own sizeHint height at the top, content
     ; gets the rest. Both widgets are real QWidget children of qt-handle, so
