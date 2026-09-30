@@ -217,7 +217,9 @@
               (lambda (thunk) (qt-queue-window-event this thunk)))))
     (define/public (is-frame?)           #f)
     (define/public (gets-focus?)         #f)
-    (define/public (set-focus)            (void))
+    ; Programmatic focus (Block D §2.1): was a no-op, so `(send button focus)`
+    ; etc. did nothing on every non-canvas widget.  canvas% overrides this.
+    (define/public (set-focus)            (when handle (shim_widget_set_focus handle)))
     (define/public (register-child child on?) (void))
     (define/public (show-children)       (void))
     (define/public (paint-children)      (void))
