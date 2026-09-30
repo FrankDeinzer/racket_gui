@@ -13,6 +13,9 @@
          shim_window_set_title
          shim_window_set_size
          shim_window_set_resize_cb
+         shim_window_set_drop_cb
+         shim_window_set_size_limits
+         _drop_cb_t
          shim_window_show
          shim_window_destroy
          shim_window_get_content_widget
@@ -229,6 +232,10 @@
 ; Native top-level resize callback: ud, new width, new height.
 (define _resize_cb_t
   (_fun #:atomic? #t _pointer _int _int -> _void))
+
+; Dropped-file callback: ud, UTF-8 path (copied on conversion).
+(define _drop_cb_t
+  (_fun #:atomic? #t _pointer _string/utf-8 -> _void))
 
 ; File dialog result callback: ud, path (raw pointer -- NULL on cancel; the
 ; Racket wrapper in filedialog.rkt casts it to _string/utf-8 itself, since
@@ -1030,3 +1037,14 @@
   (get-ffi-obj "shim_key_keysym" shim-lib
                (_fun _int _int -> _int)
                (lambda () (lambda (kc lv) 0))))
+
+; File drop (Block D §2.3) and window-manager size limits (§2.4).  Bound
+; tolerantly (like shim_key_keysym) so an older shim only loses these features.
+(define shim_window_set_drop_cb
+  (get-ffi-obj "shim_window_set_drop_cb" shim-lib
+               (_fun _pointer (_or-null _drop_cb_t) _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+(define shim_window_set_size_limits
+  (get-ffi-obj "shim_window_set_size_limits" shim-lib
+               (_fun _pointer _int _int _int _int -> _void)
+               (lambda () (lambda (w a b c d) (void)))))

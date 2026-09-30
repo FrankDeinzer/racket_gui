@@ -193,7 +193,19 @@
     (define/override (display-changed)    (void))
 
     ; make-top-container% inherits enforce-size (also defined in window% for dialog stubs)
-    (define/override (enforce-size min-x min-y max-x max-y inc-x inc-y) (void))
+    ; Tell the window manager the real min/max (Block D §2.4).  Racket sizes
+    ; are for the whole window as set-size sees them; -1 = unbounded.
+    (define/override (enforce-size min-x min-y max-x max-y inc-x inc-y)
+      (shim_window_set_size_limits qt-handle min-x min-y max-x max-y))
+
+    ; Dropped files (Block D §2.3): every DrRacket frame calls
+    ; (accept-drop-files #t).  The atomic C callback only posts (Regel 2).
+    (define drop-cb
+      (lambda (ud path)
+        (qt-queue-window-event this
+          (lambda () (send this on-drop-file (string->path path))))))
+    (define/override (drag-accept-files on?)
+      (shim_window_set_drop_cb qt-handle (and on? drop-cb) #f))
 
     ; get-focus-window: inherited from window% (tracks focus via on-set-focus/on-kill-focus)
     ; add-border-button, forget-child: NOT here — added by wxtop.rkt via public*
