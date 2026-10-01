@@ -129,8 +129,11 @@
 ; One wheel notch is 120 angleDelta units (Qt's documented convention).  A
 ; high-resolution device sends smaller increments; report at least one step so
 ; such a device still scrolls, matching gtk's 'integer wheel-steps mode.
-(define (wheel-delta->steps d)
-  (max 1 (round (/ (abs d) 120))))
+(define (wheel-delta->steps d [mode 'integer])
+  (case mode
+    [(one)      1]                              ; window<%> wheel-event-mode 'one
+    [(fraction) (/ (abs d) 120)]                ; exact fraction of a notch
+    [else       (max 1 (round (/ (abs d) 120)))]))
 
 ; ---- base canvas class (inner, wrapped by canvas-mixin) ---------------
 
@@ -262,12 +265,13 @@
     ; y-before-x ordering.
     (define wheel-cb
       (lambda (ud dx dy mods)
+        (define mode (send this get-wheel-steps-mode))
         (define-values (code steps)
           (cond
-            [(> dy 0) (values 'wheel-up    (wheel-delta->steps dy))]
-            [(< dy 0) (values 'wheel-down  (wheel-delta->steps dy))]
-            [(> dx 0) (values 'wheel-right (wheel-delta->steps dx))]
-            [(< dx 0) (values 'wheel-left  (wheel-delta->steps dx))]
+            [(> dy 0) (values 'wheel-up    (wheel-delta->steps dy mode))]
+            [(< dy 0) (values 'wheel-down  (wheel-delta->steps dy mode))]
+            [(> dx 0) (values 'wheel-right (wheel-delta->steps dx mode))]
+            [(< dx 0) (values 'wheel-left  (wheel-delta->steps dx mode))]
             [else     (values #f 0)]))
         (when code
           (define e
@@ -500,7 +504,12 @@
     (define/public (qt-wheel-scroll code steps)     #f)
     (define/override (set-focus)
       (shim_widget_set_focus qt-handle))
-    (define/public (set-wheel-steps-mode mode)      (void))
+    ; set/get-wheel-steps-mode live in window.rkt (consumed by wheel-cb above).
+    ; canvas% scroll (fractions 0..1 of the range): no-op without auto-scroll,
+    ; overridden by qt-canvas-scroll-mixin.
+    (define/public (scroll x y)                     (void))
+    ; gtk (canvas.rkt:551): for 'gl canvases, the pixel size == the scaled client size.
+    (define/public (get-gl-client-size)             (get-scaled-client-size))
     ; Additional platform callbacks required by wxcanvas.rkt's override*
     (define/public (on-scroll e)             (void))
     ; on-popup: override* target in make-canvas-glue% (wxcanvas.rkt:74)
@@ -859,6 +868,18 @@
       (dbg "set-scroll-pos ~a ~a\n" which v)
       (define sb (sb-of which))
       (when sb (shim_scrollbar_set_value sb v)))
+
+    ; canvas%'s scroll (x, y in 0..1, or -1 = leave): gtk/win32/cocoa only act in
+    ; auto-scroll mode, scaling by (range - page).  API-audit finding (HACKING 65).
+    (define/override (scroll x y)
+      (when (is-auto-scroll?)
+        (define (go sb len page frac)
+          (when (and sb (>= frac 0))
+            (shim_scrollbar_set_value
+             sb (inexact->exact (floor (* frac (max 0 (- len page))))))))
+        (go h-sb h-len h-page x)
+        (go v-sb v-len v-page y)
+        (refresh-for-autoscroll)))
 
     (define/override (get-scroll-range which)
       (if (or (is-disabled-scroll-dir? which) (is-auto-scroll?))

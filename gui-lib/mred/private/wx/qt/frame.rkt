@@ -124,6 +124,13 @@
     (define/override (show on?)
       (direct-show on?))
 
+    ; Called by wx/common/queue.rkt's shutdown-eventspace! (atomic mode) for every
+    ; top-level window of an eventspace that is being shut down -- e.g. when
+    ; DrRacket's Run/Stop kills the user program's custodian.  gtk/win32/cocoa all
+    ; define it as `(direct-show #f)`; without it Qt hit "no such method: destroy".
+    (define/public (destroy)
+      (direct-show #f))
+
     ; Terminates the recursive is-shown-to-root?/is-enabled-to-root? walk
     ; (window.rkt, docs/HACKING.md §26) -- a frame's `parent` is an owner
     ; frame or #f, not a containment parent, so the chain must not recurse

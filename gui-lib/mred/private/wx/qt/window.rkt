@@ -266,6 +266,16 @@
       (when handle (shim_widget_set_nav_key_cb handle nav-key-cb #f)))
 
     (define/public (get-qt-handle)       handle)
+    ; mred window<%>'s get-client-handle (mrwindow.rkt/mrtop.rkt): the native
+    ; handle of the client area (gtk: container widget, win32: client hwnd).
+    ; Here that is the widget children are parented to.  API-audit finding
+    ; (docs/HACKING.md section 65).
+    (define/public (get-client-handle)   (send this get-content-hwnd))
+    ; window<%> wheel-event-mode; gtk/win32/cocoa window.rkt keep the same field.
+    ; Consumed by the canvas wheel callback (canvas.rkt).
+    (define wheel-steps-mode 'one)
+    (define/public (get-wheel-steps-mode)     wheel-steps-mode)
+    (define/public (set-wheel-steps-mode mode) (set! wheel-steps-mode mode))
     ; Returns the QWidget* that children should use as their Qt parent.
     ; frame% overrides to return the central widget; panel% to its own widget.
     (define/public (get-content-hwnd)    handle)
