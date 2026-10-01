@@ -71,6 +71,19 @@
     ; flush, but only changes when the canvas is resized.
     (define arrow-h #f)
     (define arrow-buf #f)
+    ; 'border / 'control-border: gtk (wx/gtk/canvas.rkt has-border?) frames the
+    ; canvas -- text-field%, combo-field%, editor-canvas% and plain canvases with
+    ; those flags.  Qt widgets have no frame of their own, so a 1 px outline is
+    ; written over the outermost pixel ring of every flushed frame (sweep finding,
+    ; tests/sweep/gallery.rkt).  ARGB, alpha first.
+    (define (paint-border! buf w h)
+      (when (send qt-canvas has-border?)
+        (define (px! x y)
+          (define i (* 4 (+ (* y w) x)))
+          (bytes-set! buf i 255) (bytes-set! buf (+ i 1) 118)
+          (bytes-set! buf (+ i 2) 118) (bytes-set! buf (+ i 3) 118))
+        (for ([x (in-range w)]) (px! x 0) (px! x (sub1 h)))
+        (for ([y (in-range h)]) (px! 0 y) (px! (sub1 w) y))))
     (define (paint-combo-strip! buf w h)
       (define aw (send qt-canvas combo-strip-width))
       (when (and (> aw 0) (> w aw))
@@ -103,6 +116,7 @@
                (eprintf "[qt-dc] on-backing-flush proc fired, bm=~ax~a\n" w h))
              (send bm get-argb-pixels 0 0 w h buf #f #t)
              (paint-combo-strip! buf w h)
+             (paint-border! buf w h)
              (shim_canvas_blit_argb   hdl buf w h (* w 4))
              (shim_canvas_request_repaint hdl))))
        (lambda ()
@@ -135,6 +149,7 @@
     ; it into a field so qt-canvas-scroll-mixin can ask for it.
     (define the-style      style)
     (define the-combo?     (and (memq 'combo style) #t))
+    (define the-border?    (and (or (memq 'border style) (memq 'control-border style)) #t))
 
     ; expose-cb fires when Qt issues a showEvent or resizeEvent.
     ; It runs #:atomic? #t so we only enqueue work — no Racket calls.
@@ -367,6 +382,7 @@
 
     ; Width of the combo-field% arrow strip at the right edge (0 otherwise).
     (define/public (combo-strip-width) (if the-combo? combo-arrow-width 0))
+    (define/public (has-border?) the-border?)
 
     ; ---- visibility ----
 
