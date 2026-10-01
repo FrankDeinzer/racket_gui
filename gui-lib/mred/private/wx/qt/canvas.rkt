@@ -152,6 +152,9 @@
           (error 'qt-canvas% "parent must be a Qt window%; got ~a" parent)))
 
     (define qt-handle (shim_canvas_create parent-handle expose-cb #f))
+    ; 'no-focus (status/tab canvases, tooltips...): never takes keyboard focus,
+    ; like gtk (wx/gtk/canvas.rkt skips gtk_widget_set_can_focus for it).
+    (when (memq 'no-focus style) (shim_widget_set_no_focus qt-handle))
 
     ; ---- Input callbacks (D-1) ------------------------------------------
     ; All callbacks run #:atomic? #t — they only post events, never call

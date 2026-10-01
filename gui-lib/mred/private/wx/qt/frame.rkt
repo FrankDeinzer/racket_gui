@@ -67,6 +67,12 @@
     (define qt-handle (shim_window_create close-cb #f))
     ; The central QWidget* that canvas/button/panel children parent to.
     (define content-handle (shim_window_get_content_widget qt-handle))
+    ; 'no-caption / 'float (e.g. DrRacket's tooltip frame): native window flags,
+    ; must be set before the first show.  'no-resize-border needs nothing extra
+    ; (a frameless window has no border).
+    (shim_window_set_style_flags qt-handle
+                                 (+ (if (memq 'no-caption style) 1 0)
+                                    (if (memq 'float style) 2 0)))
 
     (super-new [handle     qt-handle]
                [parent     parent]

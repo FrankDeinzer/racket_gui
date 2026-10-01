@@ -18,6 +18,8 @@
          _nav_key_cb_t
          shim_window_clear_drop_cb
          shim_tab_panel_set_options
+         shim_window_set_style_flags
+         shim_widget_set_no_focus
          shim_window_set_size_limits
          _drop_cb_t
          shim_window_show
@@ -1070,6 +1072,17 @@
   (get-ffi-obj "shim_tab_panel_set_options" shim-lib
                (_fun _pointer _int _int _nav_key_cb_t _pointer _nav_key_cb_t _pointer -> _void)
                (lambda () (lambda (h c m ccb cud mcb mud) (void)))))
+
+; frame% 'no-caption/'float and canvas% 'no-focus (style-audit findings, §64.8).
+; Tolerant: an older shim only loses these two features.
+(define shim_window_set_style_flags
+  (get-ffi-obj "shim_window_set_style_flags" shim-lib
+               (_fun _pointer _int -> _void)
+               (lambda () (lambda (w f) (void)))))
+(define shim_widget_set_no_focus
+  (get-ffi-obj "shim_widget_set_no_focus" shim-lib
+               (_fun _pointer -> _void)
+               (lambda () (lambda (w) (void)))))
 
 ; Escape/Return forwarding for native controls (window.rkt qt-forward-nav-keys!).
 (define shim_widget_set_nav_key_cb
