@@ -1,6 +1,7 @@
 #lang racket/base
 ; Qt button% — wraps a QPushButton via the shim.
 (require racket/class
+         racket/draw
          "../common/event.rkt"
          "../common/queue.rkt"
          "window.rkt"
@@ -32,11 +33,31 @@
           (send parent get-content-hwnd)
           (error 'qt-button% "parent must be a Qt window%; got ~a" parent)))
 
+    ; label: string | bitmap% | (list bitmap% string pos)  (wie gtk/button.rkt)
+    (define (label-text l)
+      (cond [(string? l) l] [(pair? l) (cadr l)] [(is-a? l bitmap%) ""] [else "Button"]))
+    (define (label-bitmap l)
+      (cond [(pair? l) (car l)] [(is-a? l bitmap%) l] [else #f]))
+    ; Bitmap als Icon (straight-alpha ARGB); Rueckgabe #f = Shim ohne shim_button_set_icon.
+    (define (apply-icon! h l)
+      (define bm (label-bitmap l))
+      (and bm
+           (let* ([w (send bm get-width)] [h* (send bm get-height)]
+                  [buf (make-bytes (* w h* 4) 0)])
+             (send bm get-argb-pixels 0 0 w h* buf)
+             (let ([mask (send bm get-loaded-mask)])
+               (when mask (send mask get-argb-pixels 0 0 w h* buf #t)))
+             (positive? (shim_button_set_icon h buf w h*
+                                              (if (and (pair? l) (pair? (cddr l)) (eq? (caddr l) 'right)) 1 0))))))
+
     (define qt-handle
       (shim_button_create parent-handle
-                          (if (string? label) label "Button")
+                          (label-text label)
                           click-fn
                           #f))
+    (let ([bm (label-bitmap label)])
+      (when (and bm (not (apply-icon! qt-handle label)) (not (pair? label)))
+        (shim_button_set_label qt-handle "Button")))
 
     (super-new [handle     qt-handle]
                [parent     parent]
@@ -58,8 +79,9 @@
     ; ---- platform interface ----
 
     (define/public (set-label lbl)
-      (when (string? lbl)
-        (shim_button_set_label qt-handle lbl)))
+      (cond
+        [(string? lbl) (shim_button_set_label qt-handle lbl)]
+        [(label-bitmap lbl) (apply-icon! qt-handle lbl)]))
 
     (define/public (set-border on?)   (void))
     (define/public (direct-show on?)  (void))

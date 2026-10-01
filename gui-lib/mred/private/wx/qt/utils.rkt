@@ -52,6 +52,7 @@
          shim_button_create
          shim_button_destroy
          shim_button_set_label
+         shim_button_set_icon
          shim_menubar_create
          shim_menubar_add_menu
          shim_menubar_enable_at
@@ -72,6 +73,8 @@
          shim_action_is_checked
          shim_label_create
          shim_label_set_text
+         shim_label_set_standard_icon
+         shim_label_set_pixmap
          shim_check_box_create
          shim_check_box_set_checked
          shim_check_box_get_checked
@@ -1089,3 +1092,20 @@
   (get-ffi-obj "shim_widget_set_nav_key_cb" shim-lib
                (_fun _pointer _nav_key_cb_t _pointer -> _void)
                (lambda () (lambda (w cb ud) (void)))))
+
+; button% bitmap labels (Macro Stepper navigation buttons, ...): QPushButton::setIcon.
+; Tolerant: an older shim returns 0 (caller keeps a text fallback).
+(define shim_button_set_icon
+  (get-ffi-obj "shim_button_set_icon" shim-lib
+               (_fun _pointer _bytes _int _int _int -> _int)
+               (lambda () (lambda (b a w h r) 0))))
+
+; message% symbol/bitmap labels (dialog icons).  Tolerant: older shim -> 0, no icon.
+(define shim_label_set_standard_icon
+  (get-ffi-obj "shim_label_set_standard_icon" shim-lib
+               (_fun _pointer _int -> _int)
+               (lambda () (lambda (l k) 0))))
+(define shim_label_set_pixmap
+  (get-ffi-obj "shim_label_set_pixmap" shim-lib
+               (_fun _pointer _bytes _int _int -> _int)
+               (lambda () (lambda (l a w h) 0))))
