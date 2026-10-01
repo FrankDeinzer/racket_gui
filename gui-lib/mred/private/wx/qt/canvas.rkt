@@ -33,10 +33,53 @@
 
 ; ---- Qt-specific backing dc -------------------------------------------
 
+; ---- combo-field% arrow strip (Block D backlog, §2.6) ------------------
+; gtk packs a native GtkComboBox button next to the editor canvas; here the
+; strip is the rightmost `combo-arrow-width` pixels of the canvas widget.
+; get-client-size excludes it (so wxtextfield.rkt's pre-on-event sees a
+; button-down at x > client width and opens the popup, exactly as on gtk),
+; and qt-dc% paints the arrow into that strip of every flushed frame.  No
+; child widget on purpose: a QPushButton would join the Tab chain and steal
+; Return via setAutoDefault (Block D), and the shim has no focus-policy export.
+(define combo-arrow-width 18)
+
+(define (draw-combo-arrow-argb aw h)
+  (define bm (make-bitmap aw h #f))
+  (define bdc (new bitmap-dc% [bitmap bm]))
+  (send bdc set-pen "white" 0 'transparent)
+  (send bdc set-brush (make-object color% 240 240 240) 'solid)
+  (send bdc draw-rectangle 0 0 aw h)
+  (send bdc set-pen (make-object color% 160 160 160) 1 'solid)
+  (send bdc draw-line 0 0 0 (sub1 h))
+  (send bdc set-pen "white" 0 'transparent)
+  (send bdc set-brush (make-object color% 64 64 64) 'solid)
+  (let ([cx (quotient aw 2)] [cy (quotient h 2)])
+    (send bdc draw-polygon (list (cons (- cx 4) (- cy 2))
+                                 (cons (+ cx 4) (- cy 2))
+                                 (cons cx (+ cy 3)))))
+  (send bdc set-bitmap #f)
+  (let ([buf (make-bytes (* aw h 4))])
+    (send bm get-argb-pixels 0 0 aw h buf #f #t)
+    buf))
+
 (define qt-dc%
   (class backing-dc%
     (init-field qt-canvas)  ; the qt-base-canvas% instance
     (inherit on-backing-flush)
+
+    ; Last arrow image, keyed by height: the strip is repainted on every
+    ; flush, but only changes when the canvas is resized.
+    (define arrow-h #f)
+    (define arrow-buf #f)
+    (define (paint-combo-strip! buf w h)
+      (define aw (send qt-canvas combo-strip-width))
+      (when (and (> aw 0) (> w aw))
+        (unless (eqv? arrow-h h)
+          (set! arrow-buf (draw-combo-arrow-argb aw h))
+          (set! arrow-h h))
+        (for ([y (in-range h)])
+          (bytes-copy! buf (* 4 (+ (* y w) (- w aw)))
+                       arrow-buf (* 4 y aw) (* 4 (add1 y) aw)))))
 
     (define/override (get-backing-size wb hb)
       (let ([hdl (send qt-canvas get-handle)])
@@ -59,7 +102,8 @@
              (when (getenv "PLT_QT_DEBUG")
                (eprintf "[qt-dc] on-backing-flush proc fired, bm=~ax~a\n" w h))
              (send bm get-argb-pixels 0 0 w h buf #f #t)
-             (shim_canvas_blit_argb    hdl buf w h (* w 4))
+             (paint-combo-strip! buf w h)
+             (shim_canvas_blit_argb   hdl buf w h (* w 4))
              (shim_canvas_request_repaint hdl))))
        (lambda ()
          (when (getenv "PLT_QT_DEBUG")
@@ -78,6 +122,7 @@
 
 (define base-canvas%
   (class window%
+    (inherit client-to-screen)
     ; Init args as received after make-item% consumes window-style:
     ;   parent x y w h style [ignored-name] [gl-conf]
     (init parent x y w h style
@@ -89,6 +134,7 @@
     ; `style' is an init variable, which a method may not close over -- copy
     ; it into a field so qt-canvas-scroll-mixin can ask for it.
     (define the-style      style)
+    (define the-combo?     (and (memq 'combo style) #t))
 
     ; expose-cb fires when Qt issues a showEvent or resizeEvent.
     ; It runs #:atomic? #t so we only enqueue work — no Racket calls.
@@ -312,8 +358,12 @@
     (define/public (get-canvas-style) the-style)
 
     (define/override (get-client-size wb hb)
-      (set-box! wb (max 1 (shim_canvas_get_width  qt-handle)))
+      (set-box! wb (max 1 (- (shim_canvas_get_width qt-handle)
+                             (combo-strip-width))))
       (set-box! hb (max 1 (shim_canvas_get_height qt-handle))))
+
+    ; Width of the combo-field% arrow strip at the right edge (0 otherwise).
+    (define/public (combo-strip-width) (if the-combo? combo-arrow-width 0))
 
     ; ---- visibility ----
 
@@ -440,10 +490,36 @@
 
     ; Combo-box interface — wxtextfield.rkt creates a wx-text-editor-canvas%
     ; subclass that overrides on-combo-select, and calls the others on `c`.
+    ; The dropdown is one QMenu per canvas.  `combo-cbs` keeps every action
+    ; callback reachable from Racket for as long as its action is attached
+    ; (same GC rule as menu.rkt's retained-callbacks, §59.1); the callback only
+    ; posts the selection (Rule 2).  Index = 0-based append order, which is
+    ; what wxtextfield.rkt's on-combo-select maps back through its callbacks.
+    ; clear-combo-items detaches the actions; QMenu has no shim-side delete,
+    ; so the detached QAction objects stay allocated (a few bytes each).
+    (define combo-menu #f)
+    (define combo-actions null)   ; (action . callback), newest first
     (define/public (on-combo-select i)    (void))
-    (define/public (popup-combo)          (void))
-    (define/public (clear-combo-items)    (void))
-    (define/public (append-combo-item s)  #f)
+    (define/public (popup-combo)
+      (when (and combo-menu (pair? combo-actions))
+        (define xb (box 0))
+        (define yb (box (shim_canvas_get_height qt-handle)))
+        (client-to-screen xb yb)
+        (shim_menu_popup combo-menu (unbox xb) (unbox yb))))
+    (define/public (clear-combo-items)
+      (when combo-menu
+        (for ([a (in-list combo-actions)])
+          (shim_menu_remove_action combo-menu (car a))))
+      (set! combo-actions null))
+    (define/public (append-combo-item s)
+      (unless combo-menu (set! combo-menu (shim_menu_create "")))
+      (define i (length combo-actions))
+      (define cb (lambda (ud)
+                   (qt-queue-window-event this (lambda () (on-combo-select i)))))
+      (set! combo-actions
+            (cons (cons (shim_action_create combo-menu s 0 cb #f) cb)
+                  combo-actions))
+      #t)
     (define/public (set-combo-text t)     (void))))
 
 ; ---- qt-canvas-scroll-mixin -------------------------------------------
