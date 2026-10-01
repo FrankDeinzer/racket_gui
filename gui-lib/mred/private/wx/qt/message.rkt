@@ -15,6 +15,7 @@
   (class window%
     (init parent label x y style font [color #f])
     (define current-label (if (string? label) label ""))
+    (define current-label-kind (if (string? label) label #f))
     (define qt-handle
       (if (and parent (object? parent) (is-a? parent window%))
           (shim_label_create (send parent get-content-hwnd) current-label)
@@ -59,6 +60,19 @@
     (define/override (get-qt-handle)     qt-handle)
     (define/override (get-content-hwnd)  qt-handle)
     (define/public  (command e)          (void))
-    (define/public  (set-color c)        (void))
-    (define/public  (get-color)          #f)
+    ; Wie gtk/message.rkt: nur bei Text-Label wirksam; #f stellt die Standardfarbe wieder her.
+    (define color-val color)
+    (define (apply-color! c)
+      (when qt-handle
+        (if c
+            (shim_label_set_color qt-handle 1 (send c red) (send c green) (send c blue)
+                                  (inexact->exact (round (* 255 (send c alpha)))))
+            (shim_label_set_color qt-handle 0 0 0 0 255))))
+    (when (and color-val (string? label)) (apply-color! color-val))
+    (define/public  (get-color)          color-val)
+    (define/public  (set-color c)
+      (when (string? current-label-kind)
+        (set! color-val c)
+        (apply-color! c)
+        (void)))
     (define/public  (set-preferred-size) #f)))

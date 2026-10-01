@@ -75,6 +75,11 @@
          shim_label_set_text
          shim_label_set_standard_icon
          shim_label_set_pixmap
+         shim_label_set_color
+         shim_window_set_move_cb
+         shim_window_get_pos
+         shim_screen_count
+         shim_screen_geometry
          shim_check_box_create
          shim_check_box_set_checked
          shim_check_box_get_checked
@@ -1109,3 +1114,28 @@
   (get-ffi-obj "shim_label_set_pixmap" shim-lib
                (_fun _pointer _bytes _int _int -> _int)
                (lambda () (lambda (l a w h) 0))))
+
+; message%.set-color (QPalette::WindowText).  Tolerant: older shim -> no-op (colour ignored).
+(define shim_label_set_color
+  (get-ffi-obj "shim_label_set_color" shim-lib
+               (_fun _pointer _int _int _int _int _int -> _int)
+               (lambda () (lambda (l u r g b a) 0))))
+
+; Frame position notification / query (frame% on-move, get-x/get-y; client-area origin in screen
+; coordinates).  Tolerant: an older shim lacks them -> no on-move events, get-x/get-y stay cached.
+(define shim_window_set_move_cb
+  (get-ffi-obj "shim_window_set_move_cb" shim-lib
+               (_fun _pointer _resize_cb_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+(define shim_window_get_pos
+  (get-ffi-obj "shim_window_get_pos" shim-lib
+               (_fun _pointer _pointer -> _int)
+               (lambda () (lambda (w out) 0))))
+
+; Real screen geometry for display-size/-origin/-count.  Tolerant: older shim -> 0 -> frame.rkt keeps its
+; former 1920x1080 stub values.
+(define shim_screen_count
+  (get-ffi-obj "shim_screen_count" shim-lib (_fun -> _int) (lambda () (lambda () 0))))
+(define shim_screen_geometry
+  (get-ffi-obj "shim_screen_geometry" shim-lib (_fun _int _pointer -> _int)
+               (lambda () (lambda (n out) 0))))

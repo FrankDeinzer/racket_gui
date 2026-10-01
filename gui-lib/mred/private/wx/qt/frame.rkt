@@ -93,6 +93,30 @@
               (queue-on-size))))))
     (shim_window_set_resize_cb qt-handle resize-cb #f)
 
+    ; Native move notification (frame position).  Before this, on-move never fired and get-x/get-y
+    ; stayed at the cached initial value, so DrRacket never saved the window position
+    ; (framework:frame-position) -- sweep func-winpos.  The echo of our own `move` finds the cache
+    ; already equal and does nothing; only a real change goes through queue-on-size (wxwindow.rkt
+    ; compares get-x/get-y with its last on-move values and calls on-move).
+    (define move-cb
+      (lambda (ud nx ny)
+        (qt-queue-window-event this
+          (lambda ()
+            (when (remember-position nx ny)
+              (queue-on-size))))))
+    (shim_window_set_move_cb qt-handle move-cb #f)
+    (define pos-buf (make-bytes 8 0))
+    (define (live-pos)
+      (and (send this is-shown?)
+           (= 1 (shim_window_get_pos qt-handle pos-buf))
+           (cons (integer-bytes->integer pos-buf #t #f 0 4)
+                 (integer-bytes->integer pos-buf #t #f 4 8))))
+    (define/public (remember-position nx ny)
+      (cond [(and (equal? nx (super get-x)) (equal? ny (super get-y))) #f]
+            [else (super move nx ny) #t]))
+    (define/override (get-x) (let ([p (live-pos)]) (if p (car p) (super get-x))))
+    (define/override (get-y) (let ([p (live-pos)]) (if p (cdr p) (super get-y))))
+
     ; Titel + "*" bei modified (wie gtk/win32: DrRacket zeigt "datei.rkt - DrRacket*")
     (define saved-title (or label ""))
     (define is-modified? #f)
@@ -107,7 +131,14 @@
     (let ([nw (if (and w  (> w  0)) w  1)]
           [nh (if (and h  (> h  0)) h  1)])
       (shim_window_set_size qt-handle nw nh)
-      (set-size (or x -1) (or y -1) nw nh))
+      (set-size (or x -1) (or y -1) nw nh)
+      ; explicit initial position (e.g. DrRacket's saved framework:frame-position): really place the
+      ; window; before, only the cache got x/y and the WM chose the place (func-winpos).
+      ; Gated on the new shim (shim_window_get_pos = 1): only it reports on-move, so only then does DrRacket's
+      ; saved position exist; with an old binary the default (0 0 0) would pin every frame to client (0,0).
+      (when (and x y (exact-integer? x) (exact-integer? y)
+                 (= 1 (shim_window_get_pos qt-handle pos-buf)))
+        (shim_widget_set_geometry qt-handle x y nw nh)))
 
     ; ---- platform interface (called by wxtop.rkt glue) ----
 
@@ -168,7 +199,9 @@
     (define/override (move x y)
       (super move x y)
       (when (and qt-handle x y)
-        (shim_widget_set_geometry qt-handle x y (max 1 (send this get-width)) (max 1 (send this get-height)))))
+        (shim_widget_set_geometry qt-handle x y (max 1 (send this get-width)) (max 1 (send this get-height)))
+        ; gtk's move -> set-size -> queue-on-size: our own move also reports on-move (wxwindow.rkt dedups)
+        (queue-on-size)))
 
     (define/override (set-size nx ny nw nh)
       (super set-size nx ny nw nh)
@@ -377,15 +410,27 @@
 
 ; ---- display info stubs -------------------------------------------------
 
+; Real geometry of screen `num` via the shim (was a hard-coded 1920x1080 / origin 0,0 / 1 screen, which put
+; centered and restored windows in the wrong place on any other screen size -- sweep func-winpos).
+; Returns (list x y w h) or #f (old shim / bad index).
+(define (screen-rect num)
+  (define buf (make-bytes 16 0))
+  (and (= 1 (shim_screen_geometry (if (exact-nonnegative-integer? num) num 0) buf))
+       (list (integer-bytes->integer buf #t #f 0 4) (integer-bytes->integer buf #t #f 4 8)
+             (integer-bytes->integer buf #t #f 8 12) (integer-bytes->integer buf #t #f 12 16))))
+
 (define (display-size xb yb [all? #f] [num 0] [fail-thunk #f])
-  (set-box! xb 1920)
-  (set-box! yb 1080))
+  (define r (screen-rect num))
+  (cond [r (set-box! xb (caddr r)) (set-box! yb (cadddr r))]
+        [(and fail-thunk (exact-nonnegative-integer? num) (> num 0)) (fail-thunk)]
+        [else (set-box! xb 1920) (set-box! yb 1080)]))
 
 (define (display-origin xb yb [all? #f] [num 0] [fail-thunk #f])
-  (set-box! xb 0)
-  (set-box! yb 0))
+  (define r (screen-rect num))
+  (cond [r (set-box! xb (- (car r))) (set-box! yb (- (cadr r)))]
+        [else (set-box! xb 0) (set-box! yb 0)]))
 
-(define (display-count) 1)
+(define (display-count) (max 1 (shim_screen_count)))
 
 (define (display-bitmap-resolution [num 0] [fail-thunk #f]) 1)
 
