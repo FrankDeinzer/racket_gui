@@ -476,7 +476,10 @@
         (eprintf "[qt-canvas] flush -> request_repaint (NO fresh blit)\n"))
       (shim_canvas_request_repaint qt-handle))
     (define bg-col (make-object color% "white"))
-    (define/public (get-canvas-background) bg-col)
+    ; gtk (wx/gtk/canvas.rkt:797): a 'transparent canvas has no background colour,
+    ; so editor-canvas% and friends skip their clear and the parent shows through
+    ; (Choose Language dialog: description panes were white boxes under Qt).
+    (define/public (get-canvas-background) (if (memq 'transparent the-style) #f bg-col))
     (define/public (set-canvas-background c) (set! bg-col c))
     (define/override (set-resize-corner on?) (void))
     ; NOTE: min-client-width and min-client-height are NOT defined here.
