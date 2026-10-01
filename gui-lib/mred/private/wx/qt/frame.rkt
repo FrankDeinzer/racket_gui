@@ -93,7 +93,12 @@
               (queue-on-size))))))
     (shim_window_set_resize_cb qt-handle resize-cb #f)
 
-    (shim_window_set_title qt-handle (or label ""))
+    ; Titel + "*" bei modified (wie gtk/win32: DrRacket zeigt "datei.rkt - DrRacket*")
+    (define saved-title (or label ""))
+    (define is-modified? #f)
+    (define (apply-title!)
+      (shim_window_set_title qt-handle (if is-modified? (string-append saved-title "*") saved-title)))
+    (apply-title!)
     ; No explicit size: start tiny, like gtk (no default size) and win32, and let
     ; wxtop.rkt's `resized`/correct-size grow the frame to its content's minimum.
     ; The former 400x300 fallback never shrank for a stretchable panel, so e.g.
@@ -157,6 +162,14 @@
     ; (Cache bereits gleich) und unterdrueckt das `queue-on-size`. Vertauscht man
     ; die beiden Zeilen, sieht remember-size eine echte Aenderung und startet die
     ; Endlosschleife wieder, an der §21.7s Fix-Versuch 1 gescheitert ist.
+    ; Top-level frames really move (bisher nur Racket-seitig gemerkt): DrRackets Tooltip-Frame
+    ; (tooltip-frame% show-over -> move) landete sonst dort, wo der Fenstermanager es hinsetzte.
+    ; Koordinaten = Bildschirm, Position des Client-Bereichs (Qt setGeometry auf dem Top-Level).
+    (define/override (move x y)
+      (super move x y)
+      (when (and qt-handle x y)
+        (shim_widget_set_geometry qt-handle x y (max 1 (send this get-width)) (max 1 (send this get-height)))))
+
     (define/override (set-size nx ny nw nh)
       (super set-size nx ny nw nh)
       (when (and nw (> nw 0) nh (> nh 0))
@@ -193,10 +206,15 @@
       (= 1 (shim_window_is_fullscreen qt-handle)))
 
     (define/public (set-label lbl)
-      (shim_window_set_title qt-handle lbl))
+      (set! saved-title (or lbl "")) (apply-title!))
 
     (define/public (set-title s)
-      (shim_window_set_title qt-handle s))
+      (set! saved-title (or s "")) (apply-title!))
+
+    (define/override (set-modified mod?)
+      (unless (eq? is-modified? (and mod? #t))
+        (set! is-modified? (and mod? #t))
+        (apply-title!)))
 
     (define/public set-icon
       (case-lambda
@@ -208,6 +226,32 @@
     (define/override (on-close)           #t)
     ; on-activate, display-changed: override* targets in make-top-level-window-glue%
     (define/override (on-activate on?)    (void))
+
+    ; Aktivierung ueber den Fokus eines Kindes, wie gtk/frame.rkt (on-focus-child):
+    ; Der Shim meldet keine Fenster-Aktivierung; ohne dieses Signal feuerte on-activate
+    ; nie (DrRackets Check-Syntax-Tooltips werden NUR in on-activate eingeschaltet,
+    ; active-main-frame wurde nie gesetzt).  Gleiches Entprellen wie gtk: ein Fokuswechsel
+    ; zwischen zwei Kindern (aus, ein) liefert nur das Endergebnis.
+    (define child-has-focus? #f)
+    (define reported-activate #f)
+    (define queued-active? #f)
+    (define (focus-child-changed! on?)
+      (set! child-has-focus? on?)
+      (unless queued-active?
+        (set! queued-active? #t)
+        (qt-queue-window-event this
+          (lambda ()
+            (let ([on? child-has-focus?])
+              (set! queued-active? #f)
+              (unless (eq? on? reported-activate)
+                (set! reported-activate on?)
+                (on-activate on?)))))))
+    (define/override (record-focus-window w)
+      (super record-focus-window w)
+      (focus-child-changed! #t))
+    (define/override (clear-focus-window w)
+      (super clear-focus-window w)
+      (unless (send this get-focus-window) (focus-child-changed! #f)))
     (define/override (display-changed)    (void))
 
     ; make-top-container% inherits enforce-size (also defined in window% for dialog stubs)

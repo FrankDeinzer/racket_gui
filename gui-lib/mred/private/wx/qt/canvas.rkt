@@ -447,7 +447,9 @@
 
     ; Compatibility stubs for wx-make-window% / make-item%
     (define/public  (direct-show on?) (send this show on?))
-    (define/override (is-shown?)      (send this is-shown-to-root?))
+    ; is-shown? bleibt die EIGENE Sichtbarkeit (window.rkt, wie gtk/win32/cocoa):
+    ; DrRackets update-save-button vergleicht `modified?` mit (send save-button is-shown?)
+    ; -- mit is-shown-to-root? (#f vor dem ersten Show) wurde der Save-Button nie versteckt.
     (define/override (get-content-hwnd) qt-handle)
     (define/public  (schedule-periodic-backing-flush) (void))
     (define/public  (queue-paint)          (void))
