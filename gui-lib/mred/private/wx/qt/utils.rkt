@@ -17,6 +17,7 @@
          shim_widget_set_nav_key_cb
          _nav_key_cb_t
          shim_window_clear_drop_cb
+         shim_tab_panel_set_options
          shim_window_set_size_limits
          _drop_cb_t
          shim_window_show
@@ -1060,6 +1061,15 @@
   (get-ffi-obj "shim_window_set_size_limits" shim-lib
                (_fun _pointer _int _int _int _int -> _void)
                (lambda () (lambda (w a b c d) (void)))))
+
+; tab-panel% 'can-close / 'can-reorder: [x] per tab and mouse-drag reordering.
+; Tolerant like the Block D exports: an older shim only loses these features.
+; Callbacks reuse the (ud, int, int) shape of _nav_key_cb_t: close = (index, 0),
+; move = (from, to).
+(define shim_tab_panel_set_options
+  (get-ffi-obj "shim_tab_panel_set_options" shim-lib
+               (_fun _pointer _int _int _nav_key_cb_t _pointer _nav_key_cb_t _pointer -> _void)
+               (lambda () (lambda (h c m ccb cud mcb mud) (void)))))
 
 ; Escape/Return forwarding for native controls (window.rkt qt-forward-nav-keys!).
 (define shim_widget_set_nav_key_cb

@@ -16,6 +16,7 @@
 ; wxpanel.rkt's wx-make-tab%/wx-make-panel% after the panel glue consumes
 ; window-style: parent x y w h style labels.
 (require racket/class
+         ffi/unsafe/atomic
          "../common/event.rkt"
          "../common/queue.rkt"
          "panel.rkt"
@@ -61,6 +62,39 @@
 
     (for ([l (in-list labels)])
       (shim_tab_panel_append qt-handle (if (string? l) l "")))
+
+    ; 'can-close / 'can-reorder (what gtk's tab-panel.rkt reads from `style`):
+    ; a close button per tab and mouse-drag reordering, both native QTabBar
+    ; features.  The shim only posts: the close click does NOT remove the tab
+    ; (DrRacket decides in on-choice-close and calls delete), and a drag has
+    ; already moved the tab inside QTabBar, so Racket just reports the new order.
+    ; Bound to fields so the closures stay reachable while Qt holds the pointer.
+    (define can-close?   (and (memq 'can-close style) #t))
+    (define can-reorder? (and (memq 'can-reorder style) #t))
+    (define close-fn
+      (lambda (ud i _)
+        (queue-event the-eventspace
+                     (lambda () (send this on-choice-close i)))))
+    ; new-positions as on gtk: element k = old index of the tab now at k.
+    (define move-fn
+      (lambda (ud from to)
+        (queue-event
+         the-eventspace
+         (lambda ()
+           (define old (for/list ([i (in-range count)]) i))
+           (define new-positions
+             (let ([rest (remv from old)])
+               (append (for/list ([x (in-list rest)] [_ (in-range to)]) x)
+                       (list from)
+                       (list-tail rest (min to (length rest))))))
+           (start-atomic)
+           (dynamic-wind void
+                         (lambda () (send this on-choice-reorder new-positions))
+                         end-atomic)))))
+    (when (or can-close? can-reorder?)
+      (shim_tab_panel_set_options qt-handle
+                                  (if can-close? 1 0) (if can-reorder? 1 0)
+                                  close-fn #f move-fn #f))
 
     (super-new [handle     qt-handle]
                [parent     parent]

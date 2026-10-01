@@ -88,8 +88,13 @@
     (shim_window_set_resize_cb qt-handle resize-cb #f)
 
     (shim_window_set_title qt-handle (or label ""))
-    (let ([nw (if (and w  (> w  0)) w  400)]
-          [nh (if (and h  (> h  0)) h  300)])
+    ; No explicit size: start tiny, like gtk (no default size) and win32, and let
+    ; wxtop.rkt's `resized`/correct-size grow the frame to its content's minimum.
+    ; The former 400x300 fallback never shrank for a stretchable panel, so e.g.
+    ; the splash screen (310 px of content) came up 400 px wide with grey bars
+    ; (free test 2026-10-01; examples/splash-width-probe.rkt: Qt 400x329, gtk 310x310).
+    (let ([nw (if (and w  (> w  0)) w  1)]
+          [nh (if (and h  (> h  0)) h  1)])
       (shim_window_set_size qt-handle nw nh)
       (set-size (or x -1) (or y -1) nw nh))
 
