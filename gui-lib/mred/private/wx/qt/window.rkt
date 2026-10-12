@@ -210,6 +210,15 @@
         (set-box! xb gx)
         (set-box! yb gy)))
     (define/public (screen-to-client xb yb) (void))
+    ; warp-pointer (gtk: client-to-screen + gdk_display_warp_pointer): x/y are client
+    ; coordinates of this window.  QCursor::setPos; no-op under Wayland / old shim.
+    (define/public (warp-pointer x y)
+      (when handle
+        (define gx (box x))
+        (define gy (box y))
+        (client-to-screen gx gy)
+        (shim_cursor_set_pos (unbox gx) (unbox gy))
+        (void)))
     (define/public (popup-menu m x y)
       (let ([gx (box x)] [gy (box y)])
         (client-to-screen gx gy)
@@ -262,8 +271,16 @@
                        [control-down (not (zero? (bitwise-and mods 2)))]))
         (qt-queue-window-event this
           (lambda () (send this dispatch-on-char e #f)))))
+    ; Focus in/out of native controls -> on-set-focus/on-kill-focus (has-focus?,
+    ; get-focus-window, frame on-activate).  Regel 2: the callback only posts.
+    (define focus-cb
+      (lambda (ud gained)
+        (qt-queue-window-event this
+          (lambda () (if (= gained 1) (send this on-set-focus) (send this on-kill-focus))))))
     (define/public (qt-forward-nav-keys!)
-      (when handle (shim_widget_set_nav_key_cb handle nav-key-cb #f)))
+      (when handle
+        (shim_widget_set_nav_key_cb handle nav-key-cb #f)
+        (shim_widget_set_focus_cb handle focus-cb #f)))
 
     (define/public (get-qt-handle)       handle)
     ; mred window<%>'s get-client-handle (mrwindow.rkt/mrtop.rkt): the native

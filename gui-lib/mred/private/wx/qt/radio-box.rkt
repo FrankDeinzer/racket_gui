@@ -78,6 +78,9 @@
 
     (define/public (button-focus i)
       (shim_radio_box_button_focus qt-handle i))
+    ; gtk: focus the selected button (the container itself takes no focus).
+    (define/override (set-focus)
+      (button-focus (max 0 (get-selection))))
 
     ; ---- platform interface ----
 

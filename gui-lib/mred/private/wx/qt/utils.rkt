@@ -15,6 +15,7 @@
          shim_window_set_resize_cb
          shim_window_set_drop_cb
          shim_widget_set_nav_key_cb
+         shim_widget_set_focus_cb
          _nav_key_cb_t
          shim_window_clear_drop_cb
          shim_tab_panel_set_options
@@ -77,7 +78,9 @@
          shim_label_set_pixmap
          shim_label_set_color
          shim_window_set_move_cb
+         shim_window_set_activate_cb
          shim_window_get_pos
+         shim_cursor_set_pos
          shim_screen_count
          shim_screen_geometry
          shim_check_box_create
@@ -85,6 +88,7 @@
          shim_check_box_get_checked
          shim_list_box_create
          shim_list_box_clear
+         shim_list_box_set_activate_cb
          shim_list_box_append
          shim_list_box_set_string
          shim_list_box_delete
@@ -545,6 +549,13 @@
 (define shim_list_box_create
   (get-ffi-obj "shim_list_box_create" shim-lib
                (_fun _pointer _int _callback_t _pointer -> _pointer)))
+
+;; list-box% double-click activation -> 'list-box-dclick.
+;; Tolerant: an older shim just never reports activation (previous behaviour).
+(define shim_list_box_set_activate_cb
+  (get-ffi-obj "shim_list_box_set_activate_cb" shim-lib
+               (_fun _pointer _callback_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
 
 (define shim_list_box_clear
   (get-ffi-obj "shim_list_box_clear" shim-lib
@@ -1098,6 +1109,13 @@
                (_fun _pointer _nav_key_cb_t _pointer -> _void)
                (lambda () (lambda (w cb ud) (void)))))
 
+; Focus in/out for native controls (window.rkt qt-forward-nav-keys!).  Tolerant:
+; an older shim just keeps the old behaviour (no has-focus? tracking).
+(define shim_widget_set_focus_cb
+  (get-ffi-obj "shim_widget_set_focus_cb" shim-lib
+               (_fun _pointer _focus_cb_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+
 ; button% bitmap labels (Macro Stepper navigation buttons, ...): QPushButton::setIcon.
 ; Tolerant: an older shim returns 0 (caller keeps a text fallback).
 (define shim_button_set_icon
@@ -1127,6 +1145,17 @@
   (get-ffi-obj "shim_window_set_move_cb" shim-lib
                (_fun _pointer _resize_cb_t _pointer -> _void)
                (lambda () (lambda (w cb ud) (void)))))
+; Window activation (QEvent::ActivationChange) for frame%/dialog% on-activate.  Tolerant: an older
+; shim returns 0 -> frame.rkt relies on the child-focus path alone.
+(define shim_window_set_activate_cb
+  (get-ffi-obj "shim_window_set_activate_cb" shim-lib
+               (_fun _pointer _focus_cb_t _pointer -> _int)
+               (lambda () (lambda (w cb ud) 0))))
+;; QCursor::setPos for window<%> warp-pointer.  Tolerant: older shim -> 0 -> warp-pointer is a no-op.
+(define shim_cursor_set_pos
+  (get-ffi-obj "shim_cursor_set_pos" shim-lib
+               (_fun _int _int -> _int)
+               (lambda () (lambda (x y) 0))))
 (define shim_window_get_pos
   (get-ffi-obj "shim_window_get_pos" shim-lib
                (_fun _pointer _pointer -> _int)

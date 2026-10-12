@@ -68,6 +68,14 @@
                          (callback this
                                    (make-object control-event% 'list-box)))))))
 
+    ; Activation (double-click only; Return goes to the default button as in gtk): 'list-box-dclick.  Regel 2: only enqueues.
+    (define activate-fn
+      (lambda (ud)
+        (queue-event the-eventspace
+                     (lambda ()
+                       (callback this
+                                 (make-object control-event% 'list-box-dclick))))))
+
     ; Header-click callback (tree path only, and only when 'clickable-headers
     ; is set): posts a column-control-event%, exactly what by-list.rkt's
     ; sort-by! callback expects (e.g. is-a? column-control-event% -> get-column).
@@ -120,6 +128,7 @@
     ; After choices, not before: sizeHint() should reflect populated rows.
     (send this seed-size-from-native-hint)
     (send this qt-forward-nav-keys!)
+    (shim_list_box_set_activate_cb qt-handle activate-fn #f)
 
     ; ---- sizing ----
 

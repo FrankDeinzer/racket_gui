@@ -44,7 +44,8 @@
         (queue-event the-eventspace
                      (lambda ()
                        (when value-handle
-                         (shim_label_set_text value-handle (format "~a" (get-value))))
+                         (shim_label_set_text value-handle (format "~a" (get-value)))
+                         (place-value!))
                        (callback this
                                  (make-object control-event% 'slider))))))
 
@@ -72,6 +73,11 @@
           (values 0 0)))
 
     (define qt-handle (or panel-handle slider-handle))
+    (define last-nw 0)
+    (define value-y 0)
+    (define KNOB 18)
+    (define min-v lo)
+    (define max-v hi)
 
     (super-new [handle     qt-handle]
                [parent     parent]
@@ -93,6 +99,7 @@
                                   (if (and x (>= x 0)) x 0)
                                   (if (and y (>= y 0)) y 0)
                                   nw nh)
+        (set! last-nw nw)
         (cond
           [(not panel-handle)
            (shim_widget_set_geometry slider-handle 0 0 nw nh)]
@@ -103,18 +110,29 @@
                                      (quotient (max 0 (- nh value-h)) 2)
                                      value-w value-h)]
           [else
+           ; gtk draws the value above the slider, following the knob
+           ; (gtk_scale_set_draw_value, value position top) -- not below it.
            (define dy (quotient (max 0 (- nh THICKNESS value-h)) 2))
-           (shim_widget_set_geometry slider-handle 0 dy nw THICKNESS)
-           (shim_widget_set_geometry value-handle
-                                     (quotient (max 0 (- nw value-w)) 2)
-                                     (+ dy THICKNESS)
-                                     value-w value-h)])))
+           (set! value-y dy)
+           (shim_widget_set_geometry slider-handle 0 (+ dy value-h) nw THICKNESS)
+           (place-value!)])))
+
+    ; Horizontal slider: center the value label over the knob.
+    (define/private (place-value!)
+      (when (and value-handle (not vertical?) (> last-nw 0))
+        (define span (max 1 (- max-v min-v)))
+        (define frac (/ (- (max min-v (min max-v (get-value))) min-v) span))
+        (define cx (+ (quotient KNOB 2) (* frac (max 0 (- last-nw KNOB)))))
+        (define x (max 0 (min (max 0 (- last-nw value-w)) (inexact->exact (round (- cx (/ value-w 2.0)))))))
+        (shim_widget_set_geometry value-handle x value-y value-w value-h)))
 
     ; ---- value protocol (slider% contract, mirrors gtk/win32) ----
 
     (define/public (set-value v)
       (shim_slider_set_value slider-handle v)
-      (when value-handle (shim_label_set_text value-handle (format "~a" v))))
+      (when value-handle
+        (shim_label_set_text value-handle (format "~a" v))
+        (place-value!)))
 
     (define/public (get-value)
       (shim_slider_get_value slider-handle))

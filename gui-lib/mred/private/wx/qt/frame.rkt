@@ -78,6 +78,11 @@
                [parent     parent]
                [eventspace (current-eventspace)])
 
+    ; 'hide-menu-bar: gtk's frame% simply fullscreens the window at construction
+    ; (gtk/frame.rkt); setWindowState does not show the window.  HACKING §70.
+    (when (memq 'hide-menu-bar style)
+      (shim_window_fullscreen qt-handle 1))
+
     ; Native resize notification (docs/HACKING.md §21.7). Wired here, after
     ; super-new, so resizeEvents fired during QMainWindow construction are
     ; dropped rather than posted into a half-built object. Per Regel 2 the
@@ -159,6 +164,16 @@
 
     (define/override (show on?)
       (direct-show on?))
+
+    ; A top-level window is the root of the pre-on-char / pre-on-event chain.  window%'s
+    ; versions walk up through `parent` -- for a dialog% that is its owner frame -- so every
+    ; key/mouse event inside a dialog was first offered to the *owner's* on-subwindow-char
+    ; (mrtop's handle-traverse-key swallowed Return there: DrRacket's Choose Language never
+    ; closed on Return with focus in a radio box).  gtk/win32/cocoa frame% override both the
+    ; same way.  HACKING section 73.
+    (inherit pre-on-event pre-on-char)
+    (define/override (call-pre-on-event w e) (pre-on-event w e))
+    (define/override (call-pre-on-char w e)  (pre-on-char w e))
 
     ; Called by wx/common/queue.rkt's shutdown-eventspace! (atomic mode) for every
     ; top-level window of an eventspace that is being shut down -- e.g. when
@@ -266,19 +281,32 @@
     ; active-main-frame wurde nie gesetzt).  Gleiches Entprellen wie gtk: ein Fokuswechsel
     ; zwischen zwei Kindern (aus, ein) liefert nur das Endergebnis.
     (define child-has-focus? #f)
+    (define window-active? #f)
     (define reported-activate #f)
     (define queued-active? #f)
-    (define (focus-child-changed! on?)
-      (set! child-has-focus? on?)
+    ; Both sources (child focus, native window activation) feed one debounced
+    ; reporter: on? = (or window-active? child-has-focus?), and on-activate only
+    ; fires when that value changes -> no duplicate calls (docs/HACKING.md §69).
+    (define (update-activate!)
       (unless queued-active?
         (set! queued-active? #t)
         (qt-queue-window-event this
           (lambda ()
-            (let ([on? child-has-focus?])
+            (let ([on? (or window-active? child-has-focus?)])
               (set! queued-active? #f)
               (unless (eq? on? reported-activate)
                 (set! reported-activate on?)
                 (on-activate on?)))))))
+    (define (focus-child-changed! on?)
+      (set! child-has-focus? on?)
+      (update-activate!))
+    ; Native window activation (QEvent::ActivationChange); Regel 2: callback only posts.
+    ; Frames without a focusable child get on-activate only through this path.
+    (define activate-cb
+      (lambda (ud on?)
+        (set! window-active? (= on? 1))
+        (update-activate!)))
+    (shim_window_set_activate_cb qt-handle activate-cb #f)
     (define/override (record-focus-window w)
       (super record-focus-window w)
       (focus-child-changed! #t))
