@@ -50,6 +50,7 @@
                [eventspace the-eventspace]
                [no-show?   (and (memq 'deleted style) #t)])
     ; After buttons, not before: sizeHint() should reflect the built layout.
+    (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
     (send this qt-forward-nav-keys!)
 

@@ -126,6 +126,7 @@
         (for ([s (in-list choices)]) (shim_list_box_append qt-handle s)))
     (set! ignore-click? #f)
     ; After choices, not before: sizeHint() should reflect populated rows.
+    (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
     (send this qt-forward-nav-keys!)
     (shim_list_box_set_activate_cb qt-handle activate-fn #f)

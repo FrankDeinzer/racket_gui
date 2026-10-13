@@ -63,6 +63,7 @@
                [parent     parent]
                [eventspace the-eventspace]
                [no-show?   (and (memq 'deleted style) #t)])
+    (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
     (send this qt-forward-nav-keys!)
 

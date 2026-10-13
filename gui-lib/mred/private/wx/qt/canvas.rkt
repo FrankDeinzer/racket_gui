@@ -26,7 +26,8 @@
          "panel.rkt"
          "utils.rkt"
          "key-map.rkt"
-         "gcwin.rkt")
+         "gcwin.rkt"
+         "gl-context.rkt")
 
 (provide canvas%
          canvas-panel%)
@@ -94,12 +95,23 @@
           (bytes-copy! buf (* 4 (+ (* y w) (- w aw)))
                        arrow-buf (* 4 y aw) (* 4 (add1 y) aw)))))
 
+    ; dc<%> get-gl-context: only 'gl canvases with a live Qt GL child.
+    (define/override (get-gl-context)
+      (send qt-canvas get-qt-gl-context))
+
     (define/override (get-backing-size wb hb)
       (let ([hdl (send qt-canvas get-handle)])
         (set-box! wb (max 1 (shim_canvas_get_width  hdl)))
         (set-box! hb (max 1 (shim_canvas_get_height hdl)))))
 
     (define/override (queue-backing-flush)
+      ; 'gl canvas (§78): the QOpenGLWidget child shows the GL frame; a raster
+      ; blit underneath is never visible (gtk: queue-backing-flush skips for-gl?).
+      (if (send qt-canvas gl-child-handle)
+          (void)
+          (raster-backing-flush)))
+
+    (define/private (raster-backing-flush)
       ; Redraw-bug measurement (2026-07-09_prompt), discriminator 3: does
       ; on-backing-flush actually hand us a bitmap (full repaint happened),
       ; or does nothing arrive (nothing-to-draw-proc, e.g. no-op erase)?
@@ -173,6 +185,23 @@
     ; 'no-focus (status/tab canvases, tooltips...): never takes keyboard focus,
     ; like gtk (wx/gtk/canvas.rkt skips gtk_widget_set_can_focus for it).
     (when (memq 'no-focus style) (shim_widget_set_no_focus qt-handle))
+
+    ; ---- canvas% 'gl (§78) ----------------------------------------------
+    ; 'transparent is incompatible with 'gl (gtk: for-gl? wins only without it).
+    ; gl-child is the shim's GL state (own QOpenGLContext, created right away);
+    ; #f with an old/GL-less shim or when no context could be created -> plain
+    ; raster canvas and get-gl-context #f, as before §78 (gtk: #f on failure).
+    (define gl-child
+      (and (memq 'gl style)
+           (not (memq 'transparent style))
+           (create-canvas-gl-child qt-handle gl-conf)))
+    (define gl-ctx
+      (and gl-child
+           (new qt-gl-context%
+                [gl gl-child]
+                [double-buffered? (if gl-conf (send gl-conf get-double-buffered) #t)])))
+    (define/public (gl-child-handle) gl-child)
+    (define/public (get-qt-gl-context) gl-ctx)
 
     ; ---- Input callbacks (D-1) ------------------------------------------
     ; All callbacks run #:atomic? #t — they only post events, never call
@@ -363,7 +392,12 @@
         ; 30x30 placeholder) would stay retained at that wrong size forever.
         ; win32/gtk do the same on their own resize hooks (on-resized/
         ; internal-on-client-size -> reset-dc -> reset-backing-retained).
-        (send dc reset-backing-retained)))
+        (send dc reset-backing-retained)
+        ; canvas% on-size (mred level) never fired under Qt (§78.3): gtk's
+        ; window% set-size ends with (queue-on-size), which wxwindow.rkt turns
+        ; into a deduplicated (send mred on-size w h).  'gl programs set their
+        ; viewport/projection there (sgl gears: nothing drawn without it).
+        (send this queue-on-size)))
 
     ; `on-size' exists for editor-canvas% only, exactly as in wx/win32/canvas.rkt
     ; and wx/gtk/canvas.rkt: those backends call it from their own set-size.
@@ -511,7 +545,16 @@
     ; overridden by qt-canvas-scroll-mixin.
     (define/public (scroll x y)                     (void))
     ; gtk (canvas.rkt:551): for 'gl canvases, the pixel size == the scaled client size.
-    (define/public (get-gl-client-size)             (get-scaled-client-size))
+    ; With a Qt GL child: its size in device pixels (the FBO size, what
+    ; glViewport needs on a scaled screen).
+    (define/public (get-gl-client-size)
+      (if gl-child
+          (let ([w (shim_gl_pixel_width gl-child)]
+                [h (shim_gl_pixel_height gl-child)])
+            (if (and (> w 0) (> h 0))
+                (values w h)
+                (get-scaled-client-size)))
+          (get-scaled-client-size)))
     ; Additional platform callbacks required by wxcanvas.rkt's override*
     (define/public (on-scroll e)             (void))
     ; on-popup: override* target in make-canvas-glue% (wxcanvas.rkt:74)

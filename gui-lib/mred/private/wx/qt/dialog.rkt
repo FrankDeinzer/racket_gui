@@ -14,6 +14,8 @@
     (init parent label x y w h [style null])
     (inherit get-eventspace)
     (super-new [parent parent] [label label] [x x] [y y] [w w] [h h] [style style])
+    ; gtk: only non-dialog frames get the default PLT window icons (HACKING §75.1).
+    (send this clear-icon!)
 
     ; Toggles the toolkit-level parent-disable (frame%'s modal-enable) on
     ; every top-level window in the eventspace, mirroring wx/win32/dialog.rkt

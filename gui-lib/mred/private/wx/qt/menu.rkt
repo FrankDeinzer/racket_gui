@@ -128,7 +128,7 @@
 
     ; ---- parent tracking ----------------------------------------------------
     (define the-parent #f)
-    (define/public (set-parent p) (set! the-parent p))
+    (define/override (set-parent p) (set! the-parent p)) ; menu%: keine Qt-Umhaengung (window%-set-parent waere falsch fuer ein QMenu)
     (define/public (get-parent-obj) the-parent)
 
     ; ---- about-to-show -> on-menu-click -> on-demand (docs/HACKING.md §37) --

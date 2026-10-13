@@ -1,7 +1,8 @@
 #lang racket/base
 ; FFI bindings for the Qt shim DLL.
 (require ffi/unsafe
-         racket/path)
+         racket/path
+         (only-in racket/class send))
 
 (provide shim-lib
          shim_version
@@ -20,7 +21,17 @@
          shim_window_clear_drop_cb
          shim_tab_panel_set_options
          shim_window_set_style_flags
+         shim_widget_reparent
+         shim_window_set_icon
          shim_widget_set_no_focus
+         shim_canvas_gl_create
+         shim_gl_is_valid
+         shim_gl_make_current
+         shim_gl_done_current
+         shim_gl_swap
+         shim_gl_pixel_width
+         shim_gl_pixel_height
+         shim_gl_get_handle
          shim_window_set_size_limits
          _drop_cb_t
          shim_window_show
@@ -77,6 +88,8 @@
          shim_label_set_standard_icon
          shim_label_set_pixmap
          shim_label_set_color
+         shim_widget_set_font
+         apply-control-font!
          shim_window_set_move_cb
          shim_window_set_activate_cb
          shim_window_get_pos
@@ -1098,10 +1111,51 @@
   (get-ffi-obj "shim_window_set_style_flags" shim-lib
                (_fun _pointer _int -> _void)
                (lambda () (lambda (w f) (void)))))
+;; subwindow<%> reparent and frame% set-icon (§75.1).  Tolerant: an older shim keeps the
+;; widget under its old Qt parent / shows no window icon.  reparent returns nothing; the Racket
+;; side only relies on it for placing the child, so the fallback is a no-op.
+(define shim_widget_reparent
+  (get-ffi-obj "shim_widget_reparent" shim-lib
+               (_fun _pointer _pointer _int -> _void)
+               (lambda () (lambda (w p v) (void)))))
+(define shim_window_set_icon
+  (get-ffi-obj "shim_window_set_icon" shim-lib
+               (_fun _pointer _bytes _int _int _int -> _int)
+               (lambda () (lambda (w a pw ph add) 0))))
 (define shim_widget_set_no_focus
   (get-ffi-obj "shim_widget_set_no_focus" shim-lib
                (_fun _pointer -> _void)
                (lambda () (lambda (w) (void)))))
+
+;; canvas% 'gl (HACKING §78): QOpenGLWidget child + its context.  All tolerant:
+;; an older shim (or one built without Qt6::OpenGLWidgets, where the exports
+;; are stubs) yields no GL child, so get-gl-context stays #f -- the pre-§78
+;; behaviour, no start-up failure.
+(define shim_canvas_gl_create
+  (get-ffi-obj "shim_canvas_gl_create" shim-lib
+               (_fun _pointer _int _int _int _int _int -> _pointer)
+               (lambda () (lambda (c d s m l db) #f))))
+(define shim_gl_is_valid
+  (get-ffi-obj "shim_gl_is_valid" shim-lib (_fun _pointer -> _int)
+               (lambda () (lambda (g) 0))))
+(define shim_gl_make_current
+  (get-ffi-obj "shim_gl_make_current" shim-lib (_fun _pointer -> _int)
+               (lambda () (lambda (g) 0))))
+(define shim_gl_done_current
+  (get-ffi-obj "shim_gl_done_current" shim-lib (_fun _pointer -> _void)
+               (lambda () (lambda (g) (void)))))
+(define shim_gl_swap
+  (get-ffi-obj "shim_gl_swap" shim-lib (_fun _pointer -> _void)
+               (lambda () (lambda (g) (void)))))
+(define shim_gl_pixel_width
+  (get-ffi-obj "shim_gl_pixel_width" shim-lib (_fun _pointer -> _int)
+               (lambda () (lambda (g) 0))))
+(define shim_gl_pixel_height
+  (get-ffi-obj "shim_gl_pixel_height" shim-lib (_fun _pointer -> _int)
+               (lambda () (lambda (g) 0))))
+(define shim_gl_get_handle
+  (get-ffi-obj "shim_gl_get_handle" shim-lib (_fun _pointer -> _pointer)
+               (lambda () (lambda (g) #f))))
 
 ; Escape/Return forwarding for native controls (window.rkt qt-forward-nav-keys!).
 (define shim_widget_set_nav_key_cb
@@ -1138,6 +1192,31 @@
   (get-ffi-obj "shim_label_set_color" shim-lib
                (_fun _pointer _int _int _int _int _int -> _int)
                (lambda () (lambda (l u r g b a) 0))))
+
+;; Control font (font% -> QWidget::setFont).  Tolerant: older shim -> no-op (default font stays).
+(define shim_widget_set_font
+  (get-ffi-obj "shim_widget_set_font" shim-lib
+               (_fun _pointer _string/utf-8 _double _int _int _int _int -> _int)
+               (lambda () (lambda (w f s px b i u) 0))))
+
+;; Wendet ein font% auf ein Qt-Steuerelement an (wie gtk install-control-font).  Nichts tun bei
+;; font = #f oder wenn es dem Standard-Steuerelementfont entspricht (Layout der Default-Controls bleibt
+;; unveraendert).  Groesse in Punkten (bzw. Pixeln, wenn size-in-pixels?).
+(define (apply-control-font! handle font)
+  (when (and handle font)
+    (let* ([face (send font get-face)]
+           [size (send font get-size)]
+           [px? (send font get-size-in-pixels)]
+           [bold? (memq (send font get-weight) '(bold))]
+           [italic? (and (memq (send font get-style) '(italic slant)) #t)]
+           [ul? (send font get-underlined)])
+      (define-values (dsize dpx) (shim_control_font_size))
+      (unless (and (not bold?) (not italic?) (not ul?)
+                   (or (not face) (equal? face (shim_control_font_face)))
+                   (= size dsize) (eq? (and px? #t) dpx))
+        (shim_widget_set_font handle face (exact->inexact size) (if px? 1 0)
+                              (if bold? 1 0) (if italic? 1 0) (if ul? 1 0))))
+    (void)))
 
 ; Frame position notification / query (frame% on-move, get-x/get-y; client-area origin in screen
 ; coordinates).  Tolerant: an older shim lacks them -> no on-move events, get-x/get-y stay cached.

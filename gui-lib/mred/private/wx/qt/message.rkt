@@ -38,6 +38,7 @@
                [parent parent]
                [eventspace (current-eventspace)]
                [no-show?   (and (memq 'deleted style) #t)])
+    (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
 
     (define/override (set-size nx ny nw nh)

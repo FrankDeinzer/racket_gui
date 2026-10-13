@@ -43,6 +43,7 @@
                [eventspace the-eventspace]
                [no-show?   (and (memq 'deleted style) #t)])
     ; After choices, not before: sizeHint() should reflect populated items.
+    (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
     (send this qt-forward-nav-keys!)
 

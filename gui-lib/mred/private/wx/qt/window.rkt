@@ -120,7 +120,8 @@
     ; the inactive ones disappear (docs/HACKING.md §21).
     (define/public (show on?)
       (set! shown? (and on? #t))
-      (when handle (shim_widget_set_visible handle (if on? 1 0))))
+      (when handle (shim_widget_set_visible handle (if on? 1 0)))
+      (register-child-in-parent on?))
     (define/public (is-shown?)           shown?)
     (define/public (parent-enable on?)   (void))
 
@@ -169,7 +170,7 @@
     (define/public (on-toolbar-click)    (void))
     (define/public (on-mdi-activate on?) (void))
     (define/public (set-wait-cursor-mode on?) (void))
-    (define/public (refresh)             (void))
+    (define/public (refresh)             (refresh-all-children))
     (define/public (queue-on-size)       (void))
     ; set-label/get-label are NOT here — they're defined in subclasses
     ; (frame%, button%, make-stub-class controls) since canvas/panel don't need them
@@ -230,6 +231,22 @@
     ; etc. did nothing on every non-canvas widget.  canvas% overrides this.
     (define/public (set-focus)            (when handle (shim_widget_set_focus handle)))
     (define/public (register-child child on?) (void))
+    ; Tells the parent panel that this window is now shown / hidden (gtk/window.rkt `show`),
+    ; so panel%'s children registry can cascade `refresh` (HACKING §75.1).  frame%/dialog%
+    ; override show without calling this one, so owner frames never see their dialogs.
+    (define/public (register-child-in-parent on?)
+      (when (and parent (object? parent))
+        (send parent register-child this (and on? #t))))
+    (define/public (refresh-all-children) (void))
+    ; Reparenting (panel%'s adopt-child, called from mrcontainer.rkt `reparent` in atomic mode):
+    ; move the native widget under the new parent's content widget, like gtk's set-parent.
+    (define/public (set-parent p)
+      (set! parent p)
+      (set! x-pos 0)
+      (set! y-pos 0)
+      (when (and handle p (object? p))
+        (let ([ph (send p get-content-hwnd)])
+          (when ph (shim_widget_reparent handle ph (if shown? 1 0))))))
     (define/public (show-children)       (void))
     (define/public (paint-children)      (void))
     (define/public (get-top-frame)       this)
@@ -265,10 +282,21 @@
     ; control class after super-new.  Regel 2: the atomic callback only posts.
     (define nav-key-cb
       (lambda (ud key mods)
+        ;; Ctrl+<printable> chords (key = Qt key code 0x20..0x7e, letters upper case) are
+        ;; forwarded too (shim built after 2026-10-12); older shims only send Escape/Return.
+        (define shift? (not (zero? (bitwise-and mods 1))))
+        (define code
+          (cond [(= key #x01000000) 'escape]
+                [(and (>= key #x20) (<= key #x7e))
+                 (let ([c (integer->char key)])
+                   (if (and (char-alphabetic? c) (not shift?)) (char-downcase c) c))]
+                [else #\return]))
         (define e (new key-event%
-                       [key-code     (if (= key #x01000000) 'escape #\return)]
-                       [shift-down   (not (zero? (bitwise-and mods 1)))]
-                       [control-down (not (zero? (bitwise-and mods 2)))]))
+                       [key-code     code]
+                       [shift-down   shift?]
+                       [control-down (not (zero? (bitwise-and mods 2)))]
+                       [alt-down     (not (zero? (bitwise-and mods 4)))]
+                       [meta-down    (not (zero? (bitwise-and mods 8)))]))
         (qt-queue-window-event this
           (lambda () (send this dispatch-on-char e #f)))))
     ; Focus in/out of native controls -> on-set-focus/on-kill-focus (has-focus?,

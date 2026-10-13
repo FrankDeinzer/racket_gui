@@ -16,11 +16,23 @@
   (class %
     (inherit get-parent)
     (super-new)
-    (define/public   (adopt-child child)       (void))
-    (define/public   (get-label-position)      'horizontal)
-    (define/public   (set-label-position pos)  (void))
+    ; Label position: plain state read by wxlitem.rkt/wxtextfield.rkt (is-horiz?, gauge/slider
+    ; sizing), like gtk/win32/cocoa (HACKING §75.1).
+    (define lbl-pos 'horizontal)
+    (define children null)
+    (define/public   (adopt-child child)       (send child set-parent this))
+    (define/public   (get-label-position)      lbl-pos)
+    (define/public   (set-label-position pos)  (set! lbl-pos pos))
     (define/public   (set-item-cursor x y)     (void))
-    (define/override (register-child child on?) (void))))
+    ; Children registry (gtk/panel.rkt): shown children register via window%'s `show`, so
+    ; (send a-panel refresh) cascades to every shown child (canvas% repaints on its own refresh).
+    (define/override (register-child child on?)
+      (let ([now-on? (and (memq child children) #t)])
+        (unless (eq? on? now-on?)
+          (set! children (if on? (cons child children) (remq child children))))))
+    (define/override (refresh-all-children)
+      (for ([child (in-list children)])
+        (send child refresh)))))
 
 (define panel%
   (class (panel-mixin window%)

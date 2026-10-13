@@ -1,6 +1,10 @@
 #lang racket/base
 ; Qt frame% — wraps a QMainWindow via the shim.
 (require racket/class
+         racket/draw
+         racket/runtime-path
+         racket/promise
+         (for-syntax racket/base)
          "../common/queue.rkt"
          "window.rkt"
          "utils.rkt")
@@ -46,6 +50,34 @@
   (when root-menubar-handle
     (shim_widget_set_visible root-menubar-handle
                               (if (zero? (hash-count shown-real-frames)) 1 0))))
+
+; ---- window icons (HACKING §75.1) -----------------------------------------
+; gtk/frame.rkt gives every non-dialog frame the three PLT icons (16/32/48 px) and
+; frame%'s set-icon replaces them.  Same here via shim_window_set_icon (QWindow icon).
+(define-runtime-path plt-16x16-file '(lib "icons/plt-icon-16x16.png"))
+(define-runtime-path plt-32x32-file '(lib "icons/plt-icon-32x32.png"))
+(define-runtime-path plt-48x48-file '(lib "icons/plt-icon-48x48.png"))
+
+; bitmap% (+ optional explicit mask) -> (values straight-alpha ARGB bytes, w, h)
+(define (bitmap->argb bm mask)
+  (define w (send bm get-width))
+  (define h (send bm get-height))
+  (define buf (make-bytes (* w h 4) 0))
+  (send bm get-argb-pixels 0 0 w h buf)
+  (let ([m (or mask (send bm get-loaded-mask))])
+    (when (and m (= (send m get-width) w) (= (send m get-height) h))
+      (send m get-argb-pixels 0 0 w h buf #t)))
+  (values buf w h))
+
+(define (push-icon! handle bm mask add?)
+  (define-values (buf w h) (bitmap->argb bm mask))
+  (shim_window_set_icon handle buf w h (if add? 1 0)))
+
+(define default-icons
+  (delay
+    (with-handlers ([void (lambda (e) null)])
+      (for/list ([fn (in-list (list plt-16x16-file plt-32x32-file plt-48x48-file))])
+        (make-object bitmap% fn 'png/alpha)))))
 
 (define frame%
   (class window%
@@ -264,11 +296,33 @@
         (set! is-modified? (and mod? #t))
         (apply-title!)))
 
-    (define/public set-icon
-      (case-lambda
-        [(i) (void)]
-        [(i b) (void)]
-        [(i b l?) (void)]))
+    ; set-icon: gtk keeps a small and a big icon; Qt picks the size itself, so both are pushed
+    ; into the one QIcon (small first).  `mode`: 'small / 'big / 'both (default).
+    (define small-icon #f)
+    (define big-icon #f)
+    (define/public (set-icon bm [mask #f] [mode 'both])
+      (when (send bm ok?)
+        (case mode
+          [(small) (set! small-icon (cons bm mask))]
+          [(big)   (set! big-icon (cons bm mask))]
+          [else    (set! small-icon (cons bm mask))
+                   (set! big-icon (cons bm mask))])
+        (let ([s small-icon] [b big-icon])
+          (cond
+            [(and s b (not (eq? s b)))
+             (push-icon! qt-handle (car s) (cdr s) #f)
+             (push-icon! qt-handle (car b) (cdr b) #t)]
+            [else
+             (let ([x (or s b)])
+               (push-icon! qt-handle (car x) (cdr x) #f))]))))
+    ; dialog% starts without the default PLT icons (gtk: `unless is-dialog?`); also resets.
+    (define/public (clear-icon!)
+      (set! small-icon #f)
+      (set! big-icon #f)
+      (shim_window_set_icon qt-handle #"" 0 0 0))
+    ; Default PLT icons (16/32/48), applied at construction (dialog% clears them again).
+    (for ([bm (in-list (force default-icons))] [i (in-naturals)])
+      (push-icon! qt-handle bm #f (positive? i)))
 
     ; Default: allow close; wxtop.rkt overrides to ask mred wrapper
     (define/override (on-close)           #t)
