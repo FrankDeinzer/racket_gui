@@ -531,15 +531,26 @@
        (list (integer-bytes->integer buf #t #f 0 4) (integer-bytes->integer buf #t #f 4 8)
              (integer-bytes->integer buf #t #f 8 12) (integer-bytes->integer buf #t #f 12 16))))
 
+; Primary monitor without task bar (win32: display-size without full-screen?, display-origin with
+; avoid-bars?).  Only the Windows shim supports it; #f elsewhere / old shim -> the full geometry is used.
+(define (work-area)
+  (define buf (make-bytes 16 0))
+  (and (= 1 (shim_screen_available_geometry 0 buf))
+       (list (integer-bytes->integer buf #t #f 0 4) (integer-bytes->integer buf #t #f 4 8)
+             (integer-bytes->integer buf #t #f 8 12) (integer-bytes->integer buf #t #f 12 16))))
+
 (define (display-size xb yb [all? #f] [num 0] [fail-thunk #f])
-  (define r (screen-rect num))
+  (define r (or (and (not all?) (eqv? num 0) (work-area)) (screen-rect num)))
   (cond [r (set-box! xb (caddr r)) (set-box! yb (cadddr r))]
         [(and fail-thunk (exact-nonnegative-integer? num) (> num 0)) (fail-thunk)]
         [else (set-box! xb 1920) (set-box! yb 1080)]))
 
-(define (display-origin xb yb [all? #f] [num 0] [fail-thunk #f])
+(define (display-origin xb yb [avoid-bars? #f] [num 0] [fail-thunk #f])
   (define r (screen-rect num))
-  (cond [r (set-box! xb (- (car r))) (set-box! yb (- (cadr r)))]
+  (define wa (and avoid-bars? (eqv? num 0) (work-area)))
+  ; win32: avoid-bars? on the primary monitor -> origin of the work area (positive inset); else 0 / -origin
+  (cond [wa (set-box! xb (car wa)) (set-box! yb (cadr wa))]
+        [r (set-box! xb (- (car r))) (set-box! yb (- (cadr r)))]
         [else (set-box! xb 0) (set-box! yb 0)]))
 
 (define (display-count) (max 1 (shim_screen_count)))

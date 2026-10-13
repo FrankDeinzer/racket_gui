@@ -97,6 +97,7 @@
          shim_cursor_set_pos
          shim_screen_count
          shim_screen_geometry
+         shim_screen_available_geometry
          shim_check_box_create
          shim_check_box_set_checked
          shim_check_box_get_checked
@@ -1290,4 +1291,9 @@
   (get-ffi-obj "shim_screen_count" shim-lib (_fun -> _int) (lambda () (lambda () 0))))
 (define shim_screen_geometry
   (get-ffi-obj "shim_screen_geometry" shim-lib (_fun _int _pointer -> _int)
+               (lambda () (lambda (n out) 0))))
+; Screen area without task bar (Windows only; elsewhere = shim_screen_geometry).  Tolerant: an older
+; shim -> 0 -> frame.rkt falls back to the full screen geometry.
+(define shim_screen_available_geometry
+  (get-ffi-obj "shim_screen_available_geometry" shim-lib (_fun _int _pointer -> _int)
                (lambda () (lambda (n out) 0))))
