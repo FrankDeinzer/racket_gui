@@ -13,7 +13,7 @@
 (provide gauge%)
 
 (define gauge%
-  (class window%
+  (class item%
     (init parent label rng x y w h style font)
 
     (define qt-handle

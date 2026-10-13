@@ -11,7 +11,7 @@
 (provide check-box%)
 
 (define check-box%
-  (class window%
+  (class item%
     (init parent cb label x y w h style font)
 
     (define the-eventspace (current-eventspace))
@@ -62,6 +62,12 @@
 
     (define/public (get-value)
       (not (zero? (shim_check_box_get_checked qt-handle))))
+
+    ; set-label (HACKING §81): gtk/win32 `check-box%` erben `button%`s set-label; hier fehlte die
+    ; Methode ganz (`no such method`).  QCheckBox und QPushButton teilen QAbstractButton::setText
+    ; (gleiche Zeigeradresse); shim_button_set_label ist daher auch fuer die QCheckBox gueltig.
+    (define/public (set-label lbl)
+      (when (string? lbl) (shim_button_set_label qt-handle lbl)))
 
     ; ---- platform interface ----
 

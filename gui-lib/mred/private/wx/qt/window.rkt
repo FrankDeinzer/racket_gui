@@ -22,6 +22,7 @@
          "utils.rkt")
 
 (provide window%
+         item%
          qt-queue-window-event
          qt-queue-window-refresh-event)
 
@@ -66,11 +67,24 @@
       (set-box! xb w) (set-box! yb h))
     (define/public (get-size xb yb)
       (set-box! xb w) (set-box! yb h))
+    ; gtk/win32/cocoa end every window% set-size with (queue-on-size): wxwindow.rkt turns it into
+    ; the deduplicated (send mred on-size w h) / on-move, wxtop.rkt's override re-layouts a frame
+    ; (`resized`/correct-size).  Qt had neither, so on-size/on-move never fired for any widget but
+    ; canvas% (§78.4), and a programmatic frame% `resize` never re-laid out the children (the native
+    ; resizeEvent echoes our own call, remember-size sees the cache already equal -> no reflow;
+    ; HACKING §80).  Only a REAL change queues (gtk's `unless` guard on save-x/y/w/h): the frame's
+    ; `resized` -> set-size chain must end once the size is stable.  Posting only (rule 2).
     (define/public (set-size x y nw nh)
+      (define changed?
+        (or (and x  (not (equal? x x-pos)))
+            (and y  (not (equal? y y-pos)))
+            (and nw (> nw 0) (not (equal? nw w)))
+            (and nh (> nh 0) (not (equal? nh h)))))
       (when x  (set! x-pos x))
       (when y  (set! y-pos y))
       (when (and nw (> nw 0)) (set! w nw))
-      (when (and nh (> nh 0)) (set! h nh)))
+      (when (and nh (> nh 0)) (set! h nh))
+      (when changed? (queue-on-size)))
     ; Records a size that the toolkit reports (rather than one Racket asked
     ; for) and answers whether it actually changed. Mirrors wx/gtk/window.rkt's
     ; remember-size, including the reason it exists: set-size updates this cache
@@ -379,3 +393,14 @@
     ; -- never gets that call and stays hidden, which is the point.
     (when (and handle no-show?)
       (shim_widget_set_visible handle 0))))
+
+; item% (HACKING §81): gemeinsame Oberklasse aller Steuerelemente (button, check-box, choice, list-box,
+; message, radio-box, slider, gauge) wie gtks/win32s `item%`.  Bis dahin erbten die Qt-Steuerelemente
+; direkt von window%; der Platform-`item%` war ein nie benutzter Stub.  Folge: wxtop.rkts
+; `handle-traverse-key` (`(is-a? o wx:item%)`) hielt jedes fokussierte Steuerelement fuer "kein Item" und
+; startete die Tab-/Pfeil-Traversierung bei (0,0): programmatisches on-traverse-char sprang immer zum
+; ersten (bzw. letzten) Steuerelement.  Absichtlich ohne eigene Methoden (Unterklassen definieren
+; `command` & Co. selbst via define/public).
+(define item%
+  (class window%
+    (super-new)))

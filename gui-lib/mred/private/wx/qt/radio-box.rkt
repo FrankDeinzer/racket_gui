@@ -12,7 +12,7 @@
 (provide radio-box%)
 
 (define radio-box%
-  (class window%
+  (class item%
     (init parent cb label x y w h labels val style font)
 
     (define the-eventspace (current-eventspace))

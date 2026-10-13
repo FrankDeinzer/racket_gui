@@ -12,7 +12,7 @@
 (provide message%)
 
 (define message%
-  (class window%
+  (class item%
     (init parent label x y style font [color #f])
     (define current-label (if (string? label) label ""))
     (define current-label-kind (if (string? label) label #f))

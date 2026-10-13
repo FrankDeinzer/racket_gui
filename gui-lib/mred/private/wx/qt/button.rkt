@@ -10,7 +10,7 @@
 (provide button%)
 
 (define button%
-  (class window%
+  (class item%
     ; Init args as received from wxitem.rkt after make-item% consumes
     ; window-style:
     ;   parent  cb  label  x  y  w  h  style  font

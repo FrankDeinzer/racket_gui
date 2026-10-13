@@ -44,6 +44,21 @@
 ;; scan below the class).
 (define all-frames (make-weak-hasheq))
 
+;; HACKING §81 (GC-Use-after-free): ein versteckter, sonst unerreichbarer frame%/dialog% wurde
+;; vom GC eingesammelt, waehrend sein QMainWindow (wird nie zerstoert) noch Ereignisse in der
+;; Qt-Warteschlange hatte (Hide/Aktivierungswechsel/Fokus-Out/Resize).  Beim naechsten Pump rief
+;; Qt die Callbacks -- freigegebene Racket-Closures -> "invalid memory reference" (Probe:
+;; behavior-matrix-probe stress / frames-loop, 2 von 3 Laeufen).  gtk/win32 haben das Problem
+;; nicht (gtk zerstoert das Widget).  Abhilfe: die letzten 64 versteckten Fenster bleiben stark
+;; erreichbar, bis spaeter genug andere Fenster versteckt wurden (die Ereignisse sind dann laengst
+;; abgearbeitet).  Ringpuffer, ein Slot pro versteckter Frame.
+(define HIDDEN-KEEP 64)
+(define hidden-ring (make-vector HIDDEN-KEEP #f))
+(define hidden-next 0)
+(define (keep-hidden-window! w)
+  (vector-set! hidden-ring hidden-next w)
+  (set! hidden-next (modulo (add1 hidden-next) HIDDEN-KEEP)))
+
 ; Called from every real frame's direct-show (root-frame's own direct-show
 ; with on?=#t is never invoked -- mrtop.rkt never shows it, matching cocoa).
 (define (update-root-menubar-visibility!)
@@ -182,7 +197,8 @@
     (define/public (direct-show on?)
       (if on?
           (hash-set! all-frames this #t)
-          (hash-remove! all-frames this))
+          (begin (hash-remove! all-frames this)
+                 (keep-hidden-window! this)))
       (register-frame-shown this on?)
       (super show on?)
       (shim_window_show qt-handle (if on? 1 0))

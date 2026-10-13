@@ -31,7 +31,7 @@
 (provide list-box%)
 
 (define list-box%
-  (class window%
+  (class item%
     (init parent cb label kind x y w h choices style font
           label-font columns column-order)
 
@@ -236,10 +236,17 @@
           (shim_list_tree_select qt-handle i (if on? 1 0))
           (shim_list_box_select qt-handle i (if on? 1 0))))
 
+    ; HACKING §81: gtk `set-selection` = (select i #t #f), d. h. exklusiv; QListWidget::setCurrentRow
+    ; laesst im Multi-/Extended-Modus andere Zeilen selektiert (Probe: list-box-multi setsel (0 2 3)
+    ; statt (3)).  Erst die uebrigen Zeilen abwaehlen, dann Current setzen (+ explizit selektieren).
     (define/public (set-selection i)
+      (do-select i #t #f)
       (if tree?
           (shim_list_tree_set_current qt-handle i)
-          (shim_list_box_set_current qt-handle i)))
+          (shim_list_box_set_current qt-handle i))
+      (if tree?
+          (shim_list_tree_select qt-handle i 1)
+          (shim_list_box_select qt-handle i 1)))
 
     (define/public (set-first-visible-item i)
       (if tree?

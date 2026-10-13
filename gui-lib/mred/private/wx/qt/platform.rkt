@@ -52,12 +52,7 @@
 
 ; ---- minimal item% and clipboard/cursor stubs ------------------------------
 
-(define item%
-  (class window%
-    (init-rest args)
-    (super-new [handle #f] [parent #f])
-    (define/public   (command e) (void))
-    (define/override (gets-focus?) #t)))
+; item% kommt aus window.rkt (HACKING §81): gemeinsame Oberklasse der Steuerelemente.
 
 ; Text only (docs/2026-09-14-4_report-linux.md "Nachtrag": copy/paste was a
 ; pure no-op stub). Method names/arities follow the contract wx/common/
@@ -108,7 +103,9 @@
 
     (define/public (get-data fmt)
       (cond
-        [(equal? fmt "TEXT") (native-text)]
+        ; Vertrag (gtk/cocoa/win32): get-data liefert BYTES (UTF-8) -- nur get-text-data einen String
+        ; (HACKING §81: Qt gab hier einen String zurueck).
+        [(equal? fmt "TEXT") (let ([t (native-text)]) (and t (string->bytes/utf-8 t)))]
         [(and (client-owns-clipboard?) (member fmt client-types))
          (send client get-data fmt)]
         [else #f]))

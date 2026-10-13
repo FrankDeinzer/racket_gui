@@ -22,7 +22,7 @@
 (define MIN_LENGTH 80)
 
 (define slider%
-  (class window%
+  (class item%
     (init parent cb label val lo hi x y w style font)
 
     (define the-eventspace (current-eventspace))

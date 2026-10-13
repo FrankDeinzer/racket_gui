@@ -12,7 +12,7 @@
 (provide choice%)
 
 (define choice%
-  (class window%
+  (class item%
     (init parent cb label x y w h choices style font)
 
     (define the-eventspace (current-eventspace))
