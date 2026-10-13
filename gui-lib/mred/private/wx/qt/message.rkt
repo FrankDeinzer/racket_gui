@@ -40,6 +40,11 @@
                [no-show?   (and (memq 'deleted style) #t)])
     (apply-control-font! qt-handle font)
     (send this seed-size-from-native-hint)
+    ; Beschriftete Steuerelemente (slider/choice/list-box/radio-box): die gemeinsame Schicht
+    ; schickt set-focus an das Label (wxpanel.rkt set-focus -> erstes Kind), dessen proxy das
+    ; Steuerelement ist.  Wie win32/gtk muss das Label Fokus-In/-Out melden, sonst bleibt
+    ; get-focus-window leer und on-focus feuert nie.
+    (send this qt-forward-nav-keys!)
 
     (define/override (set-size nx ny nw nh)
       (super set-size nx ny nw nh)
@@ -59,6 +64,15 @@
 
     (define/public  (get-label)          current-label)
     (define/override (get-qt-handle)     qt-handle)
+    ; Wie button.rkt: bis zum Top-Level klettern, damit on-set-focus/on-kill-focus des Labels
+    ; (siehe qt-forward-nav-keys! oben) auf dem Frame verbucht werden.
+    (define the-parent parent)
+    (define/override (get-top-frame)
+      (let loop ([p the-parent])
+        (if (and p (object? p) (is-a? p window%))
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
+              (if pp (loop pp) p))
+            #f)))
     (define/override (get-content-hwnd)  qt-handle)
     (define/public  (command e)          (void))
     ; Wie gtk/message.rkt: nur bei Text-Label wirksam; #f stellt die Standardfarbe wieder her.
