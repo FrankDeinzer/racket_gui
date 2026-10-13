@@ -299,7 +299,11 @@
 (define (play-sound file async?) #f)
 (define (font-from-user-platform-mode)  #f)
 (define (get-font-from-user msg parent  init) #f)
-(define (color-from-user-platform-mode) 'dialog)
+; #f = no platform colour dialog: mred/private/moredialogs.rkt then shows its own portable dialog%
+; (RGB sliders + preview canvas, same code path as macOS/Windows without a native chooser).  Before
+; §83.1 the mode was 'dialog with a stub that always returned #f, i.e. get-color-from-user was
+; "cancelled" immediately.  A native QColorDialog is a possible later upgrade.
+(define (color-from-user-platform-mode) #f)
 (define (get-color-from-user msg parent init) #f)
 (define (get-highlight-background-color)
   (make-object color% 0 120 215))

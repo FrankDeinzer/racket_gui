@@ -393,6 +393,11 @@
         ; win32/gtk do the same on their own resize hooks (on-resized/
         ; internal-on-client-size -> reset-dc -> reset-backing-retained).
         (send dc reset-backing-retained)
+        ; §82: accept-tab-focus (glue: gets-focus? = tabable?) wird erst nach der Konstruktion
+        ; gesetzt, daher beim Layout nachfuehren.  Im Konstruktor-Seed ist die Glue-Klasse
+        ; evtl. noch nicht initialisiert -> Fehler ignorieren.
+        (with-handlers ([(lambda (e) #t) void])
+          (shim_widget_set_tab_focus qt-handle (if (send this gets-focus?) 1 0)))
         ; canvas% on-size (mred level) never fired under Qt (§78.3): gtk's
         ; window% set-size ends with (queue-on-size), which wxwindow.rkt turns
         ; into a deduplicated (send mred on-size w h).  'gl programs set their
@@ -475,7 +480,7 @@
     (define/override (get-top-frame)
       (let loop ([p the-parent])
         (if (and p (object? p) (is-a? p window%))
-            (let ([pp (send p get-parent)])
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
               (if pp (loop pp) p))
             #f)))
 

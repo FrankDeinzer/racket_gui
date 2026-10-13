@@ -63,11 +63,14 @@
 
 (define (file-selector message directory filename extension filters style parent)
   (cond
-    ; get-directory / get-file-list: not wired to the Qt path this session
-    ; (docs/2026-07-11_prompt.md scope is get-file + put-file only).
-    [(or (memq 'dir style) (memq 'multi style)) #f]
+    ; get-directory / get-file-list need the extended shim export (HACKING §83.1); an older
+    ; shim binary keeps the previous behaviour (#f = cancelled).
+    [(and (or (memq 'dir style) (memq 'multi style)) (not shim_file_dialog_create_ex)) #f]
     [else
      (define put? (and (memq 'put style) #t))
+     ; shim mode: 0 open, 1 save, 2 directory, 3 several files
+     (define mode (cond [(memq 'dir style) 2] [(memq 'multi style) 3] [put? 1] [else 0]))
+     (define multi? (= mode 3))
      (define parent-window
        (and parent (object? parent) (is-a? parent window%) parent))
      (define parent-handle (and parent-window (send parent-window get-qt-handle)))
@@ -89,7 +92,11 @@
                       ; This thunk runs later, dispatched by the ordinary
                       ; (non-atomic) event loop -- safe to do I/O here.
                       (dbg "[qt-filedialog] queued thunk: running, path=~a\n" path)
-                      (set-box! result-box (and path (string->path path)))
+                      (set-box! result-box
+                                (and path
+                                     (if multi?
+                                         (map string->path (regexp-split #rx"\n" path))
+                                         (string->path path))))
                       (when parent-handle (shim_widget_set_enabled parent-handle 1))
                       (semaphore-post done-sema)
                       (dbg "[qt-filedialog] queued thunk: done\n"))))
@@ -98,15 +105,18 @@
      (hash-set! pending id on-result)
      (when parent-handle (shim_widget_set_enabled parent-handle 0))
      (dbg "[qt-filedialog] calling shim_file_dialog_create id=~a\n" id)
-     (shim_file_dialog_create parent-handle
-                               (if put? 1 0)
-                               (or message "")
-                               (path-or-string->utf8-string directory)
-                               (path-or-string->utf8-string filename)
-                               (or extension "")
-                               (qt-filter-string filters)
-                               file-dialog-cb
-                               (cast id _intptr _pointer))
+     ((if shim_file_dialog_create_ex shim_file_dialog_create_ex shim_file_dialog_create)
+      parent-handle
+      (if shim_file_dialog_create_ex mode (if put? 1 0))
+      (or message "")
+      (path-or-string->utf8-string directory)
+      (path-or-string->utf8-string filename)
+      ; Unix: `extension' is ignored (docs of put-file; gtk does the same) -- Qt's setDefaultSuffix
+      ; would otherwise append it.  Windows/macOS keep the documented default-extension behaviour.
+      (if (eq? (system-type) 'unix) "" (or extension ""))
+      (qt-filter-string filters)
+      file-dialog-cb
+      (cast id _intptr _pointer))
      (dbg "[qt-filedialog] shim_file_dialog_create returned, yielding\n")
      (yield (semaphore-peek-evt done-sema))
      (dbg "[qt-filedialog] yield returned, result=~a\n" (unbox result-box))

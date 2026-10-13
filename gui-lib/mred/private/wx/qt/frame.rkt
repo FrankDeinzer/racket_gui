@@ -44,6 +44,19 @@
 ;; scan below the class).
 (define all-frames (make-weak-hasheq))
 
+;; display-changed (HACKING §83.3): the shim reports screen added/removed, primary change and geometry
+;; changes; like gtk's monitors-changed/size-changed handlers, every shown frame gets one
+;; `display-changed` call in its own eventspace.  The atomic callback only posts (Regel 2).
+(define (display-changed-cb ud)
+  (for ([f (in-list (hash-keys all-frames))])
+    (unless (eventspace-shutdown? (send f get-eventspace))
+      (qt-queue-window-event f (lambda () (send f display-changed))))))
+(define display-watch-installed? #f)
+(define (ensure-display-watch!)
+  (unless display-watch-installed?
+    (set! display-watch-installed? #t)
+    (shim_display_set_changed_cb display-changed-cb #f)))
+
 ;; HACKING §81 (GC-Use-after-free): ein versteckter, sonst unerreichbarer frame%/dialog% wurde
 ;; vom GC eingesammelt, waehrend sein QMainWindow (wird nie zerstoert) noch Ereignisse in der
 ;; Qt-Warteschlange hatte (Hide/Aktivierungswechsel/Fokus-Out/Resize).  Beim naechsten Pump rief
@@ -196,7 +209,7 @@
 
     (define/public (direct-show on?)
       (if on?
-          (hash-set! all-frames this #t)
+          (begin (ensure-display-watch!) (hash-set! all-frames this #t))
           (begin (hash-remove! all-frames this)
                  (keep-hidden-window! this)))
       (register-frame-shown this on?)
@@ -462,6 +475,7 @@
     (define/override (on-toolbar-click)     (void))
     (define/override (on-mdi-activate on?)  (void))
     (define/override (get-top-frame) this)
+    (define/override (top-level-window?) #t)
     (define/override (get-dialog-level) 0)
 
     ; ---- modal parent-disable (docs/HACKING.md §18.3) ----

@@ -46,10 +46,14 @@
     ; likewise shim_list_tree_select/set_current).
     (define ignore-click? #f)
 
+    ; §82: Racket-Semantik wie win32 ("Win32 sense of multiple and extended is backwards",
+    ; win32/list-box.rkt): 'multiple = Klick ersetzt, Strg/Shift erweitern (Qt ExtendedSelection,
+    ; auch gtk), 'extended = Klick schaltet um (Qt MultiSelection, win32 LBS_MULTIPLESEL; gtk kennt
+    ; diesen Modus nicht und verhaelt sich wie 'multiple).  Vorher war die Zuordnung vertauscht.
     (define kind-int
       (case kind
-        [(multiple) 1]
-        [(extended) 2]
+        [(multiple) 2]
+        [(extended) 1]
         [else 0]))
 
     ; ---- §60.6 dual-path dispatch --------------------------------------
@@ -314,6 +318,6 @@
     (define/override (get-top-frame)
       (let loop ([p the-parent])
         (if (and p (object? p) (is-a? p window%))
-            (let ([pp (send p get-parent)])
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
               (if pp (loop pp) p))
             #f)))))

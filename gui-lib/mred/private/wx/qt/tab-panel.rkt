@@ -148,6 +148,16 @@
       (set-box! wb (get-width))
       (set-box! hb (max 0 (- (get-height) (tab-height)))))
 
+    ; §82: der Client-Bereich eines tab-panel% ist der Inhaltsbereich unter der Tab-Leiste
+    ; (get-client-size, Kind-Koordinaten).  client->screen bildete (0,0) bisher auf die
+    ; Oberkante des ganzen Widgets ab (Differenz = Tab-Leistenhoehe); gtk/win32 liefern den
+    ; Ursprung des Inhaltsbereichs.  Sichtbar z. B. bei Popup-Menues relativ zu Kindern.
+    (define/override (client-to-screen xb yb)
+      (define-values (gx gy)
+        (shim_widget_client_to_screen content-handle (unbox xb) (unbox yb)))
+      (set-box! xb gx)
+      (set-box! yb gy))
+
     ; ---- tab-panel% contract (mirrors wx/win32, wx/gtk) ----
 
     ; Defined as append*/exposed as append (racket/class rename form) --

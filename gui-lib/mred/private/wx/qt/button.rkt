@@ -92,6 +92,6 @@
     (define/override (get-top-frame)
       (let loop ([p the-parent])
         (if (and p (object? p) (is-a? p window%))
-            (let ([pp (send p get-parent)])
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
               (if pp (loop pp) p))
             #f)))))

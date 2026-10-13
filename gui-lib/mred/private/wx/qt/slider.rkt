@@ -101,8 +101,10 @@
                                   nw nh)
         (set! last-nw nw)
         (cond
-          [(not panel-handle)
-           (shim_widget_set_geometry slider-handle 0 0 nw nh)]
+          ; 'plain: qt-handle IS the slider (already placed above).  Re-placing it at
+          ; (0,0) here (the old code) pinned it to the parent's origin and drew it over
+          ; the item label (visual matrix, scene "slider", §84).
+          [(not panel-handle) (void)]
           [vertical?
            (define dx (quotient (max 0 (- nw THICKNESS value-w)) 2))
            (shim_widget_set_geometry slider-handle dx 0 THICKNESS nh)
@@ -147,6 +149,6 @@
     (define/override (get-top-frame)
       (let loop ([p the-parent])
         (if (and p (object? p) (is-a? p window%))
-            (let ([pp (send p get-parent)])
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
               (if pp (loop pp) p))
             #f)))))

@@ -162,7 +162,18 @@
     (define/public (pre-on-char w e)     #f)
     (define/public (pre-on-event w e)    #f)
     (define/public (on-drop-file f)      (void))
-    (define/public (drag-accept-files on?) (void))
+    ; Dropped files on a child widget (canvas% `accept-drop-files', HACKING §83.2): the atomic C callback
+    ; only posts one on-drop-file event per file (Regel 2).  frame% overrides this with the window variant.
+    (define drop-file-cb
+      (lambda (ud path)
+        (qt-queue-window-event this
+          (lambda () (send this on-drop-file (string->path path))))))
+    (define/public (drag-accept-files on?)
+      (define h (send this get-qt-handle))
+      (when h
+        (if on?
+            (shim_widget_set_drop_cb h drop-file-cb #f)
+            (shim_widget_clear_drop_cb h #f #f))))
 
     ; ---- misc platform callbacks ----
     ; frame/dialog platform interface — also needed by stub dialog%
@@ -264,6 +275,9 @@
     (define/public (show-children)       (void))
     (define/public (paint-children)      (void))
     (define/public (get-top-frame)       this)
+    ; #t for frame%/dialog%: control classes' get-top-frame must stop here and not climb to a dialog's
+    ; OWNER frame (otherwise a dialog's focus child is recorded on the owner; HACKING §83.1).
+    (define/public (top-level-window?)   #f)
 
     ; ---- Qt-specific ----
 
@@ -305,12 +319,18 @@
                  (let ([c (integer->char key)])
                    (if (and (char-alphabetic? c) (not shift?)) (char-downcase c) c))]
                 [else #\return]))
+        ;; §82: Strg+Shift+<Buchstabe> (Menue-Shortcuts mit '(ctl shift)): die Keymap-Bindung
+        ;; "s:c:d" gleicht gegen other-shift-key-code (kleingeschriebener Buchstabe) ab, wie im
+        ;; Canvas-Pfad; ohne ihn feuerte der Shortcut aus einem nativen Steuerelement nie.
+        (define other-shift
+          (and shift? (char? code) (char-alphabetic? code) (char-downcase code)))
         (define e (new key-event%
                        [key-code     code]
                        [shift-down   shift?]
                        [control-down (not (zero? (bitwise-and mods 2)))]
                        [alt-down     (not (zero? (bitwise-and mods 4)))]
                        [meta-down    (not (zero? (bitwise-and mods 8)))]))
+        (when other-shift (send e set-other-shift-key-code other-shift))
         (qt-queue-window-event this
           (lambda () (send this dispatch-on-char e #f)))))
     ; Focus in/out of native controls -> on-set-focus/on-kill-focus (has-focus?,

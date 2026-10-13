@@ -24,6 +24,7 @@
          shim_widget_reparent
          shim_window_set_icon
          shim_widget_set_no_focus
+         shim_widget_set_tab_focus
          shim_canvas_gl_create
          shim_gl_is_valid
          shim_gl_make_current
@@ -164,6 +165,11 @@
          shim_radio_box_enable_button
          shim_radio_box_button_focus
          shim_file_dialog_create
+         shim_file_dialog_create_ex
+         shim_widget_set_drop_cb
+         shim_widget_clear_drop_cb
+         shim_display_set_changed_cb
+         _display_cb_t
          shim_printer_show_print_dialog
          shim_printer_show_page_setup_dialog
          shim_printer_create
@@ -864,6 +870,33 @@
                      _string/utf-8 _string/utf-8 _pointer _pointer
                      -> _void)))
 
+;; get-directory (mode 2) / get-file-list (mode 3, paths joined by newline) -- HACKING §83.1.
+;; Tolerant: #f when the shim binary predates it (filedialog.rkt then keeps returning #f for both).
+(define shim_file_dialog_create_ex
+  (get-ffi-obj "shim_file_dialog_create_ex" shim-lib
+               (_fun _pointer _int _string/utf-8 _string/utf-8 _string/utf-8
+                     _string/utf-8 _string/utf-8 _pointer _pointer
+                     -> _void)
+               (lambda () #f)))
+
+;; canvas% 'accept-drop-files (child widgets; frames use shim_window_set_drop_cb) -- HACKING §83.2.  Tolerant.
+(define shim_widget_set_drop_cb
+  (get-ffi-obj "shim_widget_set_drop_cb" shim-lib
+               (_fun _pointer _drop_cb_t _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+(define shim_widget_clear_drop_cb
+  (get-ffi-obj "shim_widget_set_drop_cb" shim-lib
+               (_fun _pointer _pointer _pointer -> _void)
+               (lambda () (lambda (w cb ud) (void)))))
+
+;; Screen configuration changed (display-changed) -- HACKING §83.3.  The callback only posts (Regel 2).  Tolerant.
+(define _display_cb_t
+  (_fun #:atomic? #t _pointer -> _void))
+(define shim_display_set_changed_cb
+  (get-ffi-obj "shim_display_set_changed_cb" shim-lib
+               (_fun _display_cb_t _pointer -> _void)
+               (lambda () (lambda (cb ud) (void)))))
+
 ; ---- printer (printer-dc% / show-print-setup) --------------------------
 ; `cb' is _pointer, not _printer_dialog_cb_t, for the same reason as the file
 ; dialog above: printer-dc.rkt builds one persistent trampoline via
@@ -1126,6 +1159,12 @@
   (get-ffi-obj "shim_widget_set_no_focus" shim-lib
                (_fun _pointer -> _void)
                (lambda () (lambda (w) (void)))))
+;; §82: tab-focusable canvases join Qt's Tab chain.  Tolerant: an older shim keeps ClickFocus
+;; (Tab from a native control then skips text-field%/combo-field%, as before).
+(define shim_widget_set_tab_focus
+  (get-ffi-obj "shim_widget_set_tab_focus" shim-lib
+               (_fun _pointer _int -> _void)
+               (lambda () (lambda (w on) (void)))))
 
 ;; canvas% 'gl (HACKING §78): QOpenGLWidget child + its context.  All tolerant:
 ;; an older shim (or one built without Qt6::OpenGLWidgets, where the exports
@@ -1204,7 +1243,12 @@
 ;; unveraendert).  Groesse in Punkten (bzw. Pixeln, wenn size-in-pixels?).
 (define (apply-control-font! handle font)
   (when (and handle font)
-    (let* ([face (send font get-face)]
+    (let* ([face (or (send font get-face)
+                     ;; §84: font% ohne Face, nur Familie ('modern/'roman/...): Qt kennt die
+                     ;; Familie nicht -> generische fontconfig-Namen (gtk: Pango-Familie).
+                     (case (send font get-family)
+                       [(modern) "Monospace"] [(roman) "Serif"] [(swiss) "Sans Serif"]
+                       [(script) "Cursive"] [(decorative) "Fantasy"] [else #f]))]
            [size (send font get-size)]
            [px? (send font get-size-in-pixels)]
            [bold? (memq (send font get-weight) '(bold))]
