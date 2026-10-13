@@ -210,6 +210,14 @@
     ; ---- platform interface ----
 
     (define/override (get-qt-handle)    qt-handle)
+    ; Wie button.rkt: bis zum Top-Level klettern, sonst verbucht on-set-focus den Fokus nie am
+    ; Frame (get-focus-window blieb #f obwohl has-focus? #t).
+    (define/override (get-top-frame)
+      (let loop ([p the-parent])
+        (if (and p (object? p) (is-a? p window%))
+            (let ([pp (and (not (send p top-level-window?)) (send p get-parent))])
+              (if pp (loop pp) p))
+            #f)))
     (define/override (get-content-hwnd) content-handle)
     (define/public   (direct-show on?)  (void))
     (define/override (gets-focus?)      #t)))
