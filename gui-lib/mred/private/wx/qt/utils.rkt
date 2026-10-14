@@ -8,6 +8,7 @@
          shim_version
          shim_app_init
          shim_app_quit
+         shim_app_set_quit_cb
          shim_pump
          shim_events_pending
          shim_window_create
@@ -302,6 +303,15 @@
 
 (define shim_app_quit
   (get-ffi-obj "shim_app_quit" shim-lib (_fun -> _void)))
+
+; Application-level quit request (macOS app-menu Quit / Cmd+Q / Dock / logout):
+; the shim ignores Qt's QEvent::Quit and calls this instead, so Racket's
+; application-quit-handler (unsaved-changes prompt) decides.  Tolerant like the
+; Block D exports: an older shim keeps Qt's immediate-quit behaviour.
+(define shim_app_set_quit_cb
+  (get-ffi-obj "shim_app_set_quit_cb" shim-lib
+               (_fun _callback_t _pointer -> _void)
+               (lambda () (lambda (cb ud) (void)))))
 
 (define shim_pump
   (get-ffi-obj "shim_pump" shim-lib (_fun _int -> _void)))

@@ -11,8 +11,14 @@
 
 (define pump-started? #f)
 
+; Kept in a module-level variable so the callback is never collected.  The
+; atomic C callback only posts (Regel 2): cocoa's applicationShouldTerminate:
+; does exactly this (queue-quit-event, then cancels the native terminate).
+(define quit-cb (lambda (ud) (queue-quit-event)))
+
 (define (qt-init!)
   (shim_app_init)
+  (shim_app_set_quit_cb quit-cb #f)
   ; Hook Racket's scheduler: report Qt events as "pending" so the
   ; scheduler keeps yielding instead of sleeping indefinitely.
   (set-check-queue! (lambda () (not (zero? (shim_events_pending)))))
