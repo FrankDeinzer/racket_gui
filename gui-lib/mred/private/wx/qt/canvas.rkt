@@ -15,6 +15,7 @@
 ; (send mred on-paint) which eventually calls the user's paint-callback.
 (require racket/class
          racket/draw
+         (only-in racket/draw/unsafe/cairo cairo_surface_flush cairo_image_surface_get_data* cairo_image_surface_get_stride)
          ffi/unsafe/atomic
          ffi/unsafe/collect-callback
          "../common/canvas-mixin.rkt"
@@ -111,6 +112,15 @@
           (void)
           (raster-backing-flush)))
 
+    ; Fast path needs: new shim export, plain colour bitmap at scale 1, and no combo strip overlay.
+    (define/private (fast-blit-ok? bm)
+      (and shim-canvas-blit-native?
+           (= (send bm get-backing-scale) 1)
+           (send bm is-color?)
+           (<= (send qt-canvas combo-strip-width) 0)
+           (send bm get-handle)
+           #t))
+
     (define/private (raster-backing-flush)
       ; Redraw-bug measurement (2026-07-09_prompt), discriminator 3: does
       ; on-backing-flush actually hand us a bitmap (full repaint happened),
@@ -122,14 +132,24 @@
          (when (is-a? bm bitmap%)
            (let* ([w    (send bm get-width)]
                   [h    (send bm get-height)]
-                  [buf  (make-bytes (* w h 4))]
+                  [buf  (if (fast-blit-ok? bm) #f (make-bytes (* w h 4)))]
                   [hdl  (send qt-canvas get-handle)])
              (when (getenv "PLT_QT_DEBUG")
                (eprintf "[qt-dc] on-backing-flush proc fired, bm=~ax~a\n" w h))
-             (send bm get-argb-pixels 0 0 w h buf #f #t)
-             (paint-combo-strip! buf w h)
-             (paint-border! buf w h)
-             (shim_canvas_blit_argb   hdl buf w h (* w 4))
+             (cond
+               [(fast-blit-ok? bm)
+                ;; §85.11: copy rows straight out of the cairo surface inside the shim.
+                (define s (send bm get-handle))
+                (cairo_surface_flush s)
+                (shim_canvas_blit_native hdl (cairo_image_surface_get_data* s) w h
+                                         (cairo_image_surface_get_stride s)
+                                         (if (send bm has-alpha-channel?) 0 1)
+                                         (if (send qt-canvas has-border?) 1 0))]
+               [else
+                (send bm get-argb-pixels 0 0 w h buf #f #t)
+                (paint-combo-strip! buf w h)
+                (paint-border! buf w h)
+                (shim_canvas_blit_argb   hdl buf w h (* w 4))])
              (shim_canvas_request_repaint hdl))))
        (lambda ()
          (when (getenv "PLT_QT_DEBUG")

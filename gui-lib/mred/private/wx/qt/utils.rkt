@@ -58,6 +58,8 @@
          shim_canvas_set_focus_cb
          shim_canvas_set_wheel_cb
          shim_canvas_blit_argb
+         shim_canvas_blit_native
+         shim-canvas-blit-native?
          shim_canvas_request_repaint
          shim_canvas_get_width
          shim_canvas_get_height
@@ -439,6 +441,15 @@
 (define shim_canvas_blit_argb
   (get-ffi-obj "shim_canvas_blit_argb" shim-lib
                (_fun _pointer _bytes _int _int _int -> _void)))
+
+;; HACKING §85.11: row-copy blit from a cairo surface.  Tolerant: an older shim lacks it and
+;; canvas.rkt keeps the get-argb-pixels + shim_canvas_blit_argb path.
+(define shim-canvas-blit-native?
+  (and (get-ffi-obj "shim_canvas_blit_native" shim-lib _fpointer (lambda () #f)) #t))
+(define shim_canvas_blit_native
+  (get-ffi-obj "shim_canvas_blit_native" shim-lib
+               (_fun _pointer _pointer _int _int _int _int _int -> _void)
+               (lambda () (lambda (c p w h s o b) (void)))))
 
 (define shim_canvas_request_repaint
   (get-ffi-obj "shim_canvas_request_repaint" shim-lib
