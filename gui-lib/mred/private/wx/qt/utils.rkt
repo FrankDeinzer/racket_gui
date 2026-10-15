@@ -229,7 +229,13 @@
 ; Locate the shim library.
 ; Path from this file: 7 levels up = project root, then qt-shim/build/<preset>/
 ; Windows uses a multi-config generator (Debug subdir); Ninja-based builds do not.
+;
+; WebAssembly (target machine tpb32l, docs/HACKING.md §85): there is no shared library to load. The shim is linked
+; into the module itself (qt-shim/wasm) and its entry points are registered as foreign symbols, so they are found
+; through the global namespace, `(ffi-lib #f)`.
 (define shim-lib
+  (if (eq? (system-type 'target-machine) 'tpb32l)
+      (ffi-lib #f)
   (let* ([here (path-only (collection-file-path "utils.rkt"
                                                 "mred" "private" "wx" "qt"))]
          [root (build-path here ".." ".." ".." ".." ".." ".." "..")]
@@ -244,7 +250,7 @@
                   [else
                    (build-path root "qt-shim" "build" "linux-x64"
                                 "libracketqtshim.so")]))])
-    (ffi-lib (path->string dll))))
+    (ffi-lib (path->string dll)))))
 
 ; C-callable callback type (called atomically from within processEvents).
 ; The body must only enqueue work; never block or trigger GC.
