@@ -24,6 +24,7 @@
          shim_window_set_style_flags
          shim_widget_reparent
          shim_window_set_icon
+         shim_window_set_owner
          shim_widget_set_no_focus
          shim_widget_set_tab_focus
          shim_canvas_gl_create
@@ -1172,6 +1173,11 @@
   (get-ffi-obj "shim_window_set_style_flags" shim-lib
                (_fun _pointer _int -> _void)
                (lambda () (lambda (w f) (void)))))
+;; dialog% owner window (Windows: no own taskbar button).  Tolerant: older shim -> no-op.
+(define shim_window_set_owner
+  (get-ffi-obj "shim_window_set_owner" shim-lib
+               (_fun _pointer _pointer -> _void)
+               (lambda () (lambda (w o) (void)))))
 ;; subwindow<%> reparent and frame% set-icon (§75.1).  Tolerant: an older shim keeps the
 ;; widget under its old Qt parent / shows no window icon.  reparent returns nothing; the Racket
 ;; side only relies on it for placing the child, so the fallback is a no-op.

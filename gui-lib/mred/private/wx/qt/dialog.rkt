@@ -5,6 +5,7 @@
 (require racket/class
          "../common/dialog.rkt"
          "../common/queue.rkt"
+         "utils.rkt"
          "frame.rkt")
 
 (provide dialog%)
@@ -16,6 +17,9 @@
     (super-new [parent parent] [label label] [x x] [y y] [w w] [h h] [style style])
     ; gtk: only non-dialog frames get the default PLT window icons (HACKING §75.1).
     (send this clear-icon!)
+    ; Windows: owned by its parent frame (no taskbar button of its own, like native win32).
+    (when (and parent (object? parent) (send parent get-handle))
+      (shim_window_set_owner (send this get-handle) (send parent get-handle)))
 
     ; Toggles the toolkit-level parent-disable (frame%'s modal-enable) on
     ; every top-level window in the eventspace, mirroring wx/win32/dialog.rkt
